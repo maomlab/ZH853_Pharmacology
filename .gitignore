@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Intermediate / large simulation artifacts (kept out of VCS; regenerate via Makefile)
+intermediate/
+*.dcd
+*.xtc
+*.trr
+*.chk
+*.h5
+*.npz
+*.log
+
+# OS / editor
+.DS_Store
+*.swp
