@@ -31,5 +31,13 @@ fetch:  ## Download comparator PDBs into data/comparators/
 qc:  ## Structure QC report -> product/
 	python src/01.02.00_qc_structure.py
 
+interactions:  ## Comparative interaction fingerprints + heatmap -> product/ (Objective 1)
+	python src/03.01.00_interaction_fingerprints.py
+
+mutations:  ## Ranked ZH853-selective mutation panel -> product/ (Objective 2)
+	python src/03.02.00_mutation_panel.py
+
+analysis: qc interactions mutations  ## Run the full static-analysis pipeline
+
 clean-intermediate:  ## Remove cached intermediate results
 	rm -rf intermediate/*

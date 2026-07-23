@@ -22,9 +22,11 @@ the **μ-opioid receptor (MOR / OPRM1)**, starting from a 3.5 Å cryo-EM structu
 | `SPECIFICATION.md` | Decisions log + open questions |
 
 ## Status
-Planning complete — see [`docs/PLAN.md`](docs/PLAN.md). Structure verified: human OPRM1 numbering,
-ligand identity confirmed as the monomeric macrocycle (MW 810), binding-pocket interaction map extracted.
-**Awaiting user input on open questions (SPECIFICATION.md OQ-1…OQ-5) before Phase 0 scaffolding.**
+Phases 0–1 and static interaction analysis (Phase 3) complete — see [`docs/PLAN.md`](docs/PLAN.md)
+and [`docs/RESULTS_interactions.md`](docs/RESULTS_interactions.md). Key findings: ZH853 keeps the
+conserved D149 (D3.32) anchor but uniquely engages **E231 (ECL2, salt bridge)** and **H321 (7.36)** —
+yielding a ranked mutation panel led by **E231Q/E231A** (Objective 2). Reproduce with `make analysis`.
+Open items: cluster specs (OQ-3) for MD/prep; MD occupancy validation; analog design (Objective 3).
 
 ## Environment
 Analysis (local, macOS): Python 3.10 + numpy, biotite, rdkit, MDAnalysis (present); add ProLIF, PLIP,

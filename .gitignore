@@ -10,6 +10,9 @@ env/
 .pytest_cache/
 .ipynb_checkpoints/
 
+# External comparator structures — re-fetchable via `make fetch` (RCSB), kept out of VCS
+data/comparators/*.pdb
+
 # Intermediate / large simulation artifacts (kept out of VCS; regenerate via Makefile)
 intermediate/
 *.dcd

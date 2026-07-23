@@ -31,6 +31,11 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   **rank-ordering only**. (user, 2026-07-22)
 - **D-8 (signaling bias — resolves OQ-4):** **Bias analysis is in scope.** Include Gz (9WST) and
   β-arrestin-1 (9WSV) comparators and transducer-state determinant analysis. (user, 2026-07-22)
+- **D-9 (interaction-fingerprint method):** Primary static analysis uses a **transparent heavy-atom
+  geometric fingerprint** (`zh853mor.interactions`) — appropriate at 3.5 Å where H-bond angle criteria
+  are over-precise, and uniform across ligand classes (no per-ligand hydrogens/bond orders needed;
+  aromatic rings found by planar-ring geometry). **PLIP + ProLIF cross-validation deferred** to when the
+  analysis conda env is built (PLIP's pip build fails without conda OpenBabel). (2026-07-22)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which

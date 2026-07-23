@@ -8,8 +8,12 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > (interactions + mutations); free energy is later rank-ordering only (D-7). **Signaling bias is in
 > scope** — Gz/β-arrestin comparators included (D-8).
 >
-> **Progress:** Phase 0 **done** (scaffold, envs, Makefile, CI gate green). Phase 1 **in progress**
-> (13 comparator PDBs fetched; `src/01.02.00_qc_structure.py` QC report generated; BW map next).
+> **Progress:** Phase 0 **done** (scaffold, envs, Makefile, CI gate green). Phase 1 **done**
+> (13 comparator PDBs fetched; QC report; BW map). Phase 3 static analysis **done** — see
+> [RESULTS_interactions.md](RESULTS_interactions.md): **Objective 1** identified E231 (ECL2, unique
+> ionic) + H321 (7.36) as ZH853-distinctive vs the conserved D149 anchor; **Objective 2** yields a
+> ranked mutation panel led by **E231Q/E231A**. Remaining Phase 3–4: MD occupancy validation; PLIP/ProLIF
+> cross-check. Next major fronts: Phase 2 prep (needs OQ-3 cluster specs) and Phase 5 analog design.
 
 ---
 

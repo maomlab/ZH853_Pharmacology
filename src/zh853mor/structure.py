@@ -40,6 +40,46 @@ CANONICAL_POCKET: dict[int, tuple[str, str]] = {
     328: ("TYR", "7.43"),
 }
 
+# Ballesteros-Weinstein label for pocket-lining residues (human OPRM1 numbering).
+# Superset of CANONICAL_POCKET covering the full ZH853 contact shell. A trailing "?"
+# marks a loop/less-certain generic-number assignment; region tags used where no clean
+# BW number applies. Well-established TM positions carry no "?".
+POCKET_BW: dict[int, str] = {
+    77: "1.39?",
+    124: "2.58",
+    126: "2.60",
+    129: "2.63",
+    130: "2.64",
+    135: "ECL1",
+    145: "3.28",
+    146: "3.29",
+    149: "3.32",
+    150: "3.33",
+    153: "3.36",
+    219: "45.50",  # ECL2 disulfide Cys (to C142/3.25)
+    220: "45.51",
+    221: "45.52",
+    223: "45.54",
+    231: "ECL2",
+    234: "5.38",
+    235: "5.39",
+    238: "5.42",
+    295: "6.48",
+    298: "6.51",
+    299: "6.52",
+    302: "6.55",
+    320: "7.35",
+    321: "7.36",
+    324: "7.39",
+    327: "7.42",
+    328: "7.43",
+}
+
+
+def bw(resid: int) -> str:
+    """Return the BW/region label for a human-OPRM1 residue id, or '-' if unknown."""
+    return POCKET_BW.get(resid, "-")
+
 
 @dataclass(frozen=True)
 class Contact:
