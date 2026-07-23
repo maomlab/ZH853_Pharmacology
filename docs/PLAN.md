@@ -18,8 +18,10 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > ZH831, C-terminal lipidation (half-life) from ZH853. **Phase 2 local prep done** — see
 > [METHODS_md_prep.md](METHODS_md_prep.md): receptor rebuilt (69 atoms, 0 incomplete), protonation
 > resolved (D2.50/Asp116 pKa 7.61 → parallel systems), ligand prepped (+1), and a SLURM bundle
-> (`src/02.10.00_slurm_bundle/`) with OpenMM equilibration/production/QC scripts. Remaining: cluster
-> submission (OQ-3), MD occupancy validation, PLIP/ProLIF cross-check, then Phase 6 FEP.
+> (`src/02.10.00_slurm_bundle/`) with OpenMM equilibration/production/QC scripts. **Phase 7 manuscript
+> draft started** — `product/manuscript/manuscript_20260722.md` synthesizes Objectives 1–3 + methods
+> ([prospective] items flagged pending MD/FEP). Remaining: cluster submission (OQ-3), MD occupancy
+> validation, PLIP/ProLIF cross-check, Phase 6 FEP, then fold results into the manuscript.
 
 ---
 
