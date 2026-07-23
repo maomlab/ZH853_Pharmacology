@@ -14,8 +14,10 @@ dependencies:
   - mdanalysis
   - biotite
   - mdtraj
-  - pdbfixer
+  - pdbfixer          # receptor rebuild (Phase 2 prep)
   - openmm            # local for prep/short runs; production runs on the cluster
+  - pdb2pqr           # protonation (wraps PROPKA)
+  - propka            # pKa prediction (Phase 2 prep)
   - jupyterlab
   # dev tooling
   - ruff

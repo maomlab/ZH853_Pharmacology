@@ -36,6 +36,16 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   are over-precise, and uniform across ligand classes (no per-ligand hydrogens/bond orders needed;
   aromatic rings found by planar-ring geometry). **PLIP + ProLIF cross-validation deferred** to when the
   analysis conda env is built (PLIP's pip build fails without conda OpenBabel). (2026-07-22)
+- **D-10 (MD systems):** Build two systems. **A (active-state complex):** MOR + ZH853 + Gi(αβγ) in
+  POPC:chol, **scFv16 removed** (crystallization aid, non-physiological) — for Objective 1–2 dynamics/
+  occupancy. **B (binding/FEP):** MOR + ZH853 in bilayer with the intracellular half Cα-restrained (or
+  Gα α5-helix retained) to hold the active state — for Objective 4 throughput. (2026-07-22)
+- **D-11 (D2.50 protonation):** PROPKA gives **Asp116 (D2.50) pKa 7.61** — at physiological pH. Build
+  **parallel systems (charged vs protonated ASH)** and compare; constant-pH MD is the rigorous fallback.
+  All chain-R His are neutral at pH 7.4 (assign HID/HIE by H-bonding). (2026-07-22)
+- **D-12 (force field):** **ff19SB + Lipid21 + OPC water + GAFF2/RESP ligand** (Amber route; matches the
+  residue-library ligand plan D-3). CHARMM36m + CHARMM-GUI is the documented alternative. Water model is
+  not mismatched to the protein FF. (2026-07-22)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which

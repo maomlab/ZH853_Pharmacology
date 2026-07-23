@@ -15,8 +15,11 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > ranked mutation panel led by **E231Q/E231A**. Phase 5 analog design **done** — see
 > [RESULTS_analog_design.md](RESULTS_analog_design.md): all analogs beyond-Ro5 (TPSA 235–280, HBD 8–10);
 > structure-based map (46 buried / 13 exposed atoms) yields two series — N-methylation (permeability) from
-> ZH831, C-terminal lipidation (half-life) from ZH853. Remaining Phase 3–4: MD occupancy validation +
-> PLIP/ProLIF cross-check. Next major front: Phase 2 prep (needs OQ-3 cluster specs), then Phase 6 FEP.
+> ZH831, C-terminal lipidation (half-life) from ZH853. **Phase 2 local prep done** — see
+> [METHODS_md_prep.md](METHODS_md_prep.md): receptor rebuilt (69 atoms, 0 incomplete), protonation
+> resolved (D2.50/Asp116 pKa 7.61 → parallel systems), ligand prepped (+1), and a SLURM bundle
+> (`src/02.10.00_slurm_bundle/`) with OpenMM equilibration/production/QC scripts. Remaining: cluster
+> submission (OQ-3), MD occupancy validation, PLIP/ProLIF cross-check, then Phase 6 FEP.
 
 ---
 

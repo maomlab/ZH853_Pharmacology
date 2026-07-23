@@ -45,5 +45,19 @@ design:  ## Structure-guided modification design -> product/ (Objective 3)
 
 analysis: qc interactions mutations analogs design  ## Run the full static-analysis pipeline
 
+prep-assess:  ## Phase 2: assess prep needs + split components -> product/, intermediate/
+	python src/02.01.00_assess_and_split.py
+
+prep-protonation:  ## Phase 2: PROPKA protonation states -> product/
+	python src/02.02.00_protonation.py
+
+prep-receptor:  ## Phase 2: rebuild receptor sidechains (PDBFixer) -> intermediate/
+	python src/02.03.00_prepare_receptor.py
+
+prep-ligand:  ## Phase 2: protonated ZH853 + parameterization inputs -> intermediate/
+	python src/02.04.00_ligand_prep.py
+
+prep: prep-assess prep-protonation prep-receptor prep-ligand  ## Run the full Phase-2 local prep
+
 clean-intermediate:  ## Remove cached intermediate results
 	rm -rf intermediate/*

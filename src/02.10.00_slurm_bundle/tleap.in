@@ -1,0 +1,24 @@
+# tleap assembly for the MOR-ZH853 membrane system.
+# ff19SB protein + Lipid21 membrane + OPC water + GAFF2/RESP ligand (SPECIFICATION D-12).
+source leaprc.protein.ff19SB
+source leaprc.lipid21
+source leaprc.water.opc
+source leaprc.gaff2
+
+# ZH853 ligand parameters (from ligand_resp/)
+LIG = loadmol2 ZH853.mol2
+loadamberparams ZH853.frcmod
+
+# assembled, pre-packed, pre-solvated system from PACKMOL-Memgen
+sys = loadpdb bilayer_system.pdb
+
+# conserved disulfide (human OPRM1 C142-C219)
+bond sys.142.SG sys.219.SG
+
+# NOTE: cap truncated receptor termini (T69/F349) with ACE/NME before this step,
+# and set HIS tautomers + D2.50 (ASH116 for the protonated variant) in the input PDB.
+
+setBox sys vdw
+check sys
+saveamberparm sys system.prmtop system.rst7
+quit
