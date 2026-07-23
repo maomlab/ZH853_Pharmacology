@@ -4,6 +4,13 @@
 Tracks what is planned, in progress, done, and considered-but-deferred.
 Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICATION.md).
 
+> **User-set direction (2026-07-22):** ZH853 = monomeric macrocycle (D-6). **Objectives 1–2 lead**
+> (interactions + mutations); free energy is later rank-ordering only (D-7). **Signaling bias is in
+> scope** — Gz/β-arrestin comparators included (D-8).
+>
+> **Progress:** Phase 0 **done** (scaffold, envs, Makefile, CI gate green). Phase 1 **in progress**
+> (13 comparator PDBs fetched; `src/01.02.00_qc_structure.py` QC report generated; BW map next).
+
 ---
 
 ## 1. Scientific framing
@@ -256,8 +263,7 @@ Treat as **rank-ordering**, not absolute affinities, unless convergence is demon
   macrocycles; deferred to a sensitivity check.
 - **Full asymmetric plasma-membrane bilayer (PIP2/PSM, physiological cholesterol)** — deferred to a
   sensitivity variant after the POPC:chol 9:1 baseline is established.
-- **Signaling-bias structural analysis** (Gz / β-arrestin comparators 9WST/9WSV) — in scope only if the
-  user prioritizes ZH853's reported bias/low-tolerance profile.
+- *(Signaling-bias structural analysis is now **in scope** per D-8 — moved out of "deferred".)*
 
 ---
 

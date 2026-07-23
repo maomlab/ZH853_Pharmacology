@@ -1,0 +1,28 @@
+# Local analysis environment (macOS / no GPU required).
+# Structure QC, interaction fingerprints, cheminformatics, plotting.
+#   conda env create -f environment.yml   (or:  make env)
+name: zh853mor
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - rdkit
+  - mdanalysis
+  - biotite
+  - mdtraj
+  - pdbfixer
+  - openmm            # local for prep/short runs; production runs on the cluster
+  - jupyterlab
+  # dev tooling
+  - ruff
+  - mypy
+  - pytest
+  - pre-commit
+  - pip
+  - pip:
+      - prolif        # trajectory interaction fingerprints
+      - plip          # static protein-ligand interaction profiler

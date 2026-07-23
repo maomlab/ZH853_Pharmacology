@@ -23,21 +23,22 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   check. Embed receptor only; Gi in cytoplasmic slab with extra intracellular Z-padding. (2026-07-22)
 - **D-5 (free-energy framing):** Treat ABFE/FEP/CTMD results as **rank-ordering** unless convergence is
   explicitly demonstrated, given documented macrocyclic-peptide non-convergence. (2026-07-22)
+- **D-6 (ZH853 identity — resolves OQ-1):** ZH853 is the **monomeric macrocycle per the SMILES/structure**
+  (Tyr–cyclo[D-Lys–Trp–Phe–Glu]–Gly-NH₂, C₄₂H₅₁N₉O₈, MW 810). The "(…)₂" dimer name in OBJECTIVES is a
+  typo. All parameterization/analysis uses this species. (user, 2026-07-22)
+- **D-7 (lead priority — resolves OQ-2):** **Objectives 1–2 lead** (comparative interaction analysis +
+  mutation panel — highest-confidence, structure-driven). Free energy (Obj 4) proceeds later as
+  **rank-ordering only**. (user, 2026-07-22)
+- **D-8 (signaling bias — resolves OQ-4):** **Bias analysis is in scope.** Include Gz (9WST) and
+  β-arrestin-1 (9WSV) comparators and transducer-state determinant analysis. (user, 2026-07-22)
 
 ## Open questions (need user input)
-- **OQ-1 (ZH853 identity — load-bearing):** OBJECTIVES names ZH853 as "(Tyr-[D-Lys-Phe-Phe-Asp]₂-NH₂)₂"
-  (a dimer, Phe-Phe), but the accompanying SMILES and the modeled ligand `L01` (59 heavy atoms, C₄₂H₅₁N₉O₈)
-  are a **monomeric macrocycle containing Trp** (Tyr–cyclo[D-Lys–Trp–Phe–Glu]–Gly-NH₂). The SMILES matches
-  the structure; the name does not. **Please confirm the intended chemical identity and stereochemistry.**
-- **OQ-2 (prioritization & depth):** Which of Objectives 1–4 should lead, and how deep on the high-risk
-  free-energy work (rank-ordering only vs full ABFE campaign)?
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which
   software is preinstalled vs must be built (OpenMM, PLUMED, OpenFE, phenix/MolProbity, Gaussian/Psi4 for RESP)?
-- **OQ-4 (signaling bias scope):** Is ZH853's reported signaling bias / reduced-tolerance profile in scope
-  (would pull in Gz/β-arrestin comparators 9WST/9WSV and bias-focused analysis)?
+  Needed before Phase 2 SLURM bundles; pins versions in `environment-cluster.yml`.
 - **OQ-5 (analog set for FEP):** Confirm the analog panel for Objective 4 = ZH850, ZH831, ZH809 (from
-  OBJECTIVES), plus any Phase-5 designed analogs; note the OBJECTIVES analog names/SMILES also have internal
-  Trp/Phe inconsistencies to reconcile alongside OQ-1.
+  OBJECTIVES), plus any Phase-5 designed analogs; the OBJECTIVES analog names/SMILES have internal Trp/Phe
+  inconsistencies (same class of typo as D-6) to reconcile — the **SMILES should be treated as authoritative**.
 
 ## Data provenance
 - `data/mor_gi_scfv16_refine-coot-22_real_space_refined_169_edit.pdb` — 3.5 Å cryo-EM real-space-refined

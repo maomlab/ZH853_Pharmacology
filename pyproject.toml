@@ -1,0 +1,37 @@
+[project]
+name = "zh853mor"
+version = "0.1.0"
+description = "Computational structural analysis of ZH853 binding to the mu-opioid receptor"
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["zh853mor*"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+# Numbered workflow scripts (src/NN.NN.NN_*.py) are entry points, not importable modules.
+extend-exclude = []
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true   # MDAnalysis/rdkit/biotite ship partial or no stubs
+files = ["src/zh853mor", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

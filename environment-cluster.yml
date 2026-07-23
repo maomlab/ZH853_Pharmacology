@@ -1,0 +1,28 @@
+# SLURM / simulation environment (Linux + CUDA GPU).
+# MD (OpenMM), force fields, free-energy, enhanced sampling. Built on the cluster.
+#   conda env create -f environment-cluster.yml   (or:  make env-cluster)
+# NOTE: pin exact versions once cluster CUDA/driver stack is known (see SPECIFICATION OQ-3).
+name: zh853mor-sim
+channels:
+  - conda-forge
+  - openeye        # optional; only if an OpenEye license is available for charge assignment
+dependencies:
+  - python=3.10
+  - openmm
+  - openmmforcefields>=0.16.0   # >=0.16.0 required for multi-residue (peptide) ligands
+  - openff-toolkit
+  - openff-interchange
+  - ambertools                  # tleap/antechamber/parmchk2 for residue-library ligand params
+  - parmed
+  - mdanalysis
+  - mdtraj
+  - rdkit
+  - numpy
+  - scipy
+  # enhanced sampling / free energy
+  - plumed
+  - openmm-plumed
+  - alchemlyb
+  - pip
+  - pip:
+      - openfe                  # relative FEP + AbsoluteBindingProtocol (v1.7+)
