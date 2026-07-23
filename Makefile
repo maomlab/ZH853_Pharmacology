@@ -37,7 +37,13 @@ interactions:  ## Comparative interaction fingerprints + heatmap -> product/ (Ob
 mutations:  ## Ranked ZH853-selective mutation panel -> product/ (Objective 2)
 	python src/03.02.00_mutation_panel.py
 
-analysis: qc interactions mutations  ## Run the full static-analysis pipeline
+analogs:  ## Analog physicochemical property panel -> product/ (Objective 3)
+	python src/05.01.00_analog_properties.py
+
+design:  ## Structure-guided modification design -> product/ (Objective 3)
+	python src/05.02.00_design_modifications.py
+
+analysis: qc interactions mutations analogs design  ## Run the full static-analysis pipeline
 
 clean-intermediate:  ## Remove cached intermediate results
 	rm -rf intermediate/*

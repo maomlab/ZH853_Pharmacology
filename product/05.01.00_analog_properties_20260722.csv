@@ -1,0 +1,5 @@
+name,mw,tpsa,clogp,hbd,hba,rotb,aromatic_rings,fsp3,formal_charge,rgyr,psa3d_frac,intramol_hbonds,bro5_flags
+ZH853,809.9,280,-0.15,10,9,11,4,0.36,0,5.58,0.30,6,MW>500;TPSA>140;HBD>5
+ZH850,752.9,251,0.73,9,8,9,4,0.35,0,5.65,0.29,5,MW>500;TPSA>140;HBD>5
+ZH831,713.8,235,0.25,8,8,9,3,0.37,0,5.07,0.28,4,MW>500;TPSA>140;HBD>5
+ZH809,738.8,251,0.34,9,8,9,4,0.33,0,5.80,0.30,5,MW>500;TPSA>140;HBD>5

@@ -26,7 +26,9 @@ Phases 0–1 and static interaction analysis (Phase 3) complete — see [`docs/P
 and [`docs/RESULTS_interactions.md`](docs/RESULTS_interactions.md). Key findings: ZH853 keeps the
 conserved D149 (D3.32) anchor but uniquely engages **E231 (ECL2, salt bridge)** and **H321 (7.36)** —
 yielding a ranked mutation panel led by **E231Q/E231A** (Objective 2). Reproduce with `make analysis`.
-Open items: cluster specs (OQ-3) for MD/prep; MD occupancy validation; analog design (Objective 3).
+Analog design (Objective 3) also complete — see [`docs/RESULTS_analog_design.md`](docs/RESULTS_analog_design.md):
+all analogs are beyond-Ro5; two design series proposed (N-methylation for permeability, lipidation for
+half-life). Open items: cluster specs (OQ-3) for MD/prep; MD occupancy validation; Phase 6 free energy.
 
 ## Environment
 Analysis (local, macOS): Python 3.10 + numpy, biotite, rdkit, MDAnalysis (present); add ProLIF, PLIP,

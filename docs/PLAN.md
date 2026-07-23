@@ -12,8 +12,11 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > (13 comparator PDBs fetched; QC report; BW map). Phase 3 static analysis **done** — see
 > [RESULTS_interactions.md](RESULTS_interactions.md): **Objective 1** identified E231 (ECL2, unique
 > ionic) + H321 (7.36) as ZH853-distinctive vs the conserved D149 anchor; **Objective 2** yields a
-> ranked mutation panel led by **E231Q/E231A**. Remaining Phase 3–4: MD occupancy validation; PLIP/ProLIF
-> cross-check. Next major fronts: Phase 2 prep (needs OQ-3 cluster specs) and Phase 5 analog design.
+> ranked mutation panel led by **E231Q/E231A**. Phase 5 analog design **done** — see
+> [RESULTS_analog_design.md](RESULTS_analog_design.md): all analogs beyond-Ro5 (TPSA 235–280, HBD 8–10);
+> structure-based map (46 buried / 13 exposed atoms) yields two series — N-methylation (permeability) from
+> ZH831, C-terminal lipidation (half-life) from ZH853. Remaining Phase 3–4: MD occupancy validation +
+> PLIP/ProLIF cross-check. Next major front: Phase 2 prep (needs OQ-3 cluster specs), then Phase 6 FEP.
 
 ---
 
