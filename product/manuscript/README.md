@@ -3,8 +3,12 @@
 Working draft synthesizing the completed analyses (Objectives 1–3) plus the established
 MD/free-energy methods.
 
-- `manuscript_20260722.md` — the draft (intro, related work, methods, results, discussion,
-  conclusions, references).
+- `manuscript_20260722.md` — the draft in Markdown (intro, related work, methods, results,
+  discussion, conclusions, references).
+- `manuscript.tex` — LaTeX source (article class, `authblk`, `booktabs`, embedded figures,
+  `thebibliography`). Compile with **`make manuscript`** (uses `tectonic`, which auto-fetches
+  packages) → `manuscript.pdf` (~7 pp).
+- `manuscript.pdf` — compiled PDF.
 - `figures/` — figures copied from dated `product/` outputs:
   - `fig1_interaction_heatmap.png` ← `product/03.01.00_fingerprint_heatmap_*.png`
   - `fig2_property_space.png` ← `product/05.01.00_analog_property_space_*.png`

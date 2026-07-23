@@ -59,5 +59,8 @@ prep-ligand:  ## Phase 2: protonated ZH853 + parameterization inputs -> intermed
 
 prep: prep-assess prep-protonation prep-receptor prep-ligand  ## Run the full Phase-2 local prep
 
+manuscript:  ## Compile the LaTeX manuscript -> product/manuscript/manuscript.pdf
+	cd product/manuscript && tectonic manuscript.tex
+
 clean-intermediate:  ## Remove cached intermediate results
 	rm -rf intermediate/*
