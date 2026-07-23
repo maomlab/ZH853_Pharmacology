@@ -111,7 +111,8 @@ model (3.5\,\Ang; CC$_{\text{mask}}$ 0.80; 0.0\% Ramachandran outliers). Chains:
 ZH853 as HETATM ligand L01 (E). The construct uses \textbf{human OPRM1 (UniProt P35372) numbering},
 verified against all canonical orthosteric positions; mouse-numbered comparators were offset by $+2$
 to this frame. The ligand's 59 heavy atoms and formula (C$_{42}$H$_{51}$N$_9$O$_8$, 810\,Da) match the
-reference SMILES, confirming the monomeric macrocycle.
+reference SMILES, confirming the monomeric macrocycle. The overall complex and the orthosteric pocket
+are shown in Figures~\ref{fig:overview} and~\ref{fig:pocket}.
 
 \textbf{3.2 Comparator set.} Thirteen structures were retrieved from the RCSB PDB: peptide agonists
 6DDE/8EFQ (DAMGO), 8F7R (endomorphin-1), 8F7Q (\bt-endorphin), 9WST/9WSV (DAMGO with Gz/\bt-arrestin);
@@ -154,8 +155,9 @@ macrocycles, free-energy results are framed as rank-ordering.
 ZH853 contacts 25 receptor residues. Its Tyr1 \al-amine forms the \textbf{canonical Asp3.32 (Asp149)
 salt bridge} (3.16\,\Ang) and hydrogen-bonds Tyr7.43 (Tyr328, 3.17\,\Ang) --- the ``3--7 lock'' ---
 while the Tyr1 ring and the macrocyclic Trp/Phe pack into the conserved hydrophobic subpocket (Met3.36,
-Val3.28/Ile3.29, Ile6.51, Val6.55, Val5.42). Every one of these contacts is shared by all twelve
-comparator agonists (Figure~\ref{fig:heatmap}), confirming that ZH853 presents the same ``message''
+Val3.28/Ile3.29, Ile6.51, Val6.55, Val5.42; Figure~\ref{fig:posemap}). Every one of these contacts is
+shared by all twelve comparator agonists (Figure~\ref{fig:heatmap}), confirming that ZH853 presents the
+same ``message''
 pharmacophore as morphine, fentanyl, DAMGO, and endomorphin-1. Consistent with this, PROPKA assigns
 Asp149 a depressed pKa (6.0), i.e.\ charged and salt-bridge-competent.
 
@@ -191,8 +193,9 @@ occupancy and relative-FEP/in-silico-mutagenesis validation.
 
 \subsection{Drug-likeness liabilities and a two-axis design strategy (Objective 3)}
 
-All four analogs sit firmly beyond rule-of-5 (MW 714--810, TPSA 235--280\,\Angsq, 8--10 H-bond donors;
-Figure~\ref{fig:props}); the dominant liabilities are high polar surface area and donor count. Their 3D
+All four analogs (Figure~\ref{fig:ligands}) sit firmly beyond rule-of-5 (MW 714--810,
+TPSA 235--280\,\Angsq, 8--10 H-bond donors; Figure~\ref{fig:props}); the dominant liabilities are high
+polar surface area and donor count. Their 3D
 conformers show 4--6 intramolecular H-bonds --- partial donor self-shielding consistent with
 chameleonic behavior. From the bound pose, \textbf{46 of 59 ligand heavy atoms are buried} (the
 Tyr1/aromatic pharmacophore) and \textbf{13 are solvent-exposed}, defining where derivatization is
@@ -244,6 +247,46 @@ selectivity, and (iii) rank the analog and designed-variant affinities. Longer t
 correlates with ZH853's reported signaling bias.
 
 \section*{Figures}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{figures/fig4_ligand_depictions.pdf}
+  \caption{ZH853 and the three FEP analogs (ZH850/831/809), drawn as scaffold-aligned 2D structures
+  with standard atom coloring and CIP stereo descriptors. All are Tyr-cyclo[\ldots]-NH$_2$ endomorphin-1
+  macrocycles differing by single-residue substitutions (Trp$\leftrightarrow$Phe, Glu$\leftrightarrow$Asp
+  ring size, $\pm$Gly cap).}
+  \label{fig:ligands}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.78\linewidth]{figures/fig6_molstar_overview.png}
+  \caption{The experimentally characterized MOR--ZH853--Gi--scFv16 cryo-EM complex (Mol* render):
+  \uOR{} receptor 7TM bundle (gold), G$\alpha$i (orange), G$\beta$ (teal), G$\gamma$ (purple), and
+  scFv16 (magenta), with ZH853 (green sticks) in the orthosteric pocket.}
+  \label{fig:overview}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/fig7_molstar_pocket.png}
+  \caption{Orthosteric pocket of the ZH853 complex (Mol* render): ZH853 (yellow ball-and-stick) with
+  key receptor residues (blue) as sticks, labeled by Ballesteros-Weinstein number. Salt bridges
+  (orange) to Asp3.32 and ECL2 Glu231 and H-bonds (blue) to Tyr7.43 and Asn2.63 are drawn as distance
+  lines; the receptor cartoon is faded for context.}
+  \label{fig:pocket}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\linewidth]{figures/fig5_interaction_map.pdf}
+  \caption{PoseView-style 2D interaction map of ZH853 in the MOR pocket, generated from the
+  3.5\,\Ang{} cryo-EM coordinates. The ligand skeleton (atom-colored) is surrounded by contacting
+  residues, colored by chemical class and placed in the direction of their contact atom; connectors
+  are styled by interaction type. The Asp3.32 (Asp149) and ECL2 Glu231 salt bridges (orange) and the
+  Tyr7.43/Asn2.63 H-bonds (blue) are highlighted.}
+  \label{fig:posemap}
+\end{figure}
 
 \begin{figure}[htbp]
   \centering

@@ -9,10 +9,14 @@ MD/free-energy methods.
   `thebibliography`). Compile with **`make manuscript`** (uses `tectonic`, which auto-fetches
   packages) → `manuscript.pdf` (~7 pp).
 - `manuscript.pdf` — compiled PDF.
-- `figures/` — figures copied from dated `product/` outputs:
-  - `fig1_interaction_heatmap.png` ← `product/03.01.00_fingerprint_heatmap_*.png`
-  - `fig2_property_space.png` ← `product/05.01.00_analog_property_space_*.png`
-  - `fig3_design_shifts.png` ← `product/05.02.00_design_property_shifts_*.png`
+- `figures/` — figures copied from dated `product/` outputs (compiled figure numbers in parentheses):
+  - `fig4_ligand_depictions.pdf` (Fig 1) — 2D atom-colored vector depictions ← `src/05.03.00`
+  - `fig5_interaction_map.pdf` (Fig 2) — PoseView-style 2D interaction map ← `src/03.03.00`
+  - `fig6_molstar_overview.png` (Fig 3) — Mol\* 3D complex overview ← `src/03.10.00_molstar_render`
+  - `fig7_molstar_pocket.png` (Fig 4) — Mol\* 3D pocket + interactions ← `src/03.10.00_molstar_render`
+  - `fig1_interaction_heatmap.png` (Fig 5) ← `product/03.01.00_fingerprint_heatmap_*.png`
+  - `fig2_property_space.png` (Fig 6) ← `product/05.01.00_analog_property_space_*.png`
+  - `fig3_design_shifts.png` (Fig 7) ← `product/05.02.00_design_property_shifts_*.png`
 
 ## Provenance / regeneration
 Every figure, table, and number traces to a scripted analysis. Regenerate the underlying

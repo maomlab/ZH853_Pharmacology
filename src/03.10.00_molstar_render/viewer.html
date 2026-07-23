@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" type="text/css" href="node_modules/molstar/build/viewer/molstar.css" />
+  <style>
+    html, body { margin: 0; padding: 0; }
+    #app { position: absolute; left: 0; top: 0; width: 1600px; height: 1200px; }
+    /* hide viewport overlay controls + axis widget for clean publication figures */
+    .msp-viewport-controls, .msp-viewport-top-left-controls { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="text/javascript" src="node_modules/molstar/build/viewer/molstar.js"></script>
+  <script type="text/javascript">
+    window.ready = false;
+
+    async function initViewer() {
+      window.viewer = await molstar.Viewer.create('app', {
+        layoutIsExpanded: false, layoutShowControls: false, layoutShowLog: false,
+        layoutShowSequence: false, layoutShowLeftPanel: false,
+        viewportShowExpand: false, viewportShowControls: false, viewportShowSettings: false,
+        viewportShowSelectionMode: false, viewportShowAnimation: false,
+      });
+      // white background for publication figures
+      window.viewer.plugin.canvas3d.setProps({
+        renderer: { backgroundColor: 0xffffff },
+        postprocessing: { outline: { name: 'on', params: { scale: 1, threshold: 0.33,
+          color: 0x000000, includeTransparent: true } },
+          occlusion: { name: 'on', params: { samples: 32, multiScale: { name: 'off', params: {} },
+            radius: 5, bias: 0.8, blurKernelSize: 15, resolutionScale: 1 } } },
+        camera: { helper: { axes: { name: 'off', params: {} } } },
+      });
+      window.ready = true;
+    }
+
+    async function loadPDB(pdbString) {
+      const v = window.viewer;
+      await v.loadStructureFromData(pdbString, 'pdb', false);
+      window.loaded = true;
+    }
+
+    async function loadMVS(mvsString) {
+      await window.viewer.loadMvsData(mvsString, 'mvsj');
+      await settle();
+      window.loaded = true;
+    }
+
+    // Scene: whole complex overview (cartoon + ligand from the default preset).
+    async function sceneOverview() {
+      await new Promise(r => setTimeout(r, 500));
+      window.viewer.plugin.managers.camera.reset();
+      await settle();
+    }
+
+    // Scene: orthosteric pocket -- focus the ligand so MolStar renders surrounding
+    // residues + non-covalent interactions (its focus representation).
+    async function scenePocket() {
+      const plugin = window.viewer.plugin;
+      const struct = plugin.managers.structure.hierarchy.current.structures[0];
+      const data = struct.cell.obj.data;
+      const sel = molstar.Script.getStructureSelection(function (Q) {
+        return Q.struct.generator.atomGroups({
+          'residue-test': Q.core.rel.eq([
+            Q.struct.atomProperty.macromolecular.label_comp_id(), 'L01']),
+          'group-by': Q.struct.atomProperty.macromolecular.residueKey(),
+        });
+      }, data);
+      const loci = molstar.StructureSelection.toLociWithSourceUnits(sel);
+      plugin.managers.structure.focus.setFromLoci(loci);
+      plugin.managers.camera.focusLoci(loci);
+      await settle();
+    }
+
+    async function settle() {
+      // wait for async representation building + a few render frames
+      await new Promise(r => setTimeout(r, 2500));
+    }
+  </script>
+</body>
+</html>

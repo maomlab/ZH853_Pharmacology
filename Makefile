@@ -59,7 +59,18 @@ prep-ligand:  ## Phase 2: protonated ZH853 + parameterization inputs -> intermed
 
 prep: prep-assess prep-protonation prep-receptor prep-ligand  ## Run the full Phase-2 local prep
 
-manuscript:  ## Compile the LaTeX manuscript -> product/manuscript/manuscript.pdf
+depictions:  ## 2D vector ligand depictions -> product/ + manuscript fig
+	python src/05.03.00_ligand_depictions.py
+
+interaction-map:  ## PoseView-style 2D interaction map -> product/ + manuscript fig
+	python src/03.03.00_interaction_map.py
+
+molstar-render:  ## Headless MolStar 3D renders (needs npm install first) -> product/ + manuscript figs
+	cd src/03.10.00_molstar_render && npm install --silent && python ../../src/03.10.00_molstar_render/build_pocket_mvs.py && node render.js
+
+figures: depictions interaction-map  ## Regenerate the vector figures (MolStar via molstar-render)
+
+manuscript: figures  ## Compile the LaTeX manuscript -> product/manuscript/manuscript.pdf
 	cd product/manuscript && tectonic manuscript.tex
 
 clean-intermediate:  ## Remove cached intermediate results

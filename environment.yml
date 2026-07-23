@@ -25,6 +25,9 @@ dependencies:
   - pytest
   - pre-commit
   - pip
+  - cairosvg          # SVG->PDF for vector figures (RDKit depictions)
   - pip:
       - prolif        # trajectory interaction fingerprints
       - plip          # static protein-ligand interaction profiler
+      - molviewspec   # MolViewSpec scenes for MolStar 3D renders
+      - svglib        # SVG->PDF fallback
