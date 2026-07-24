@@ -163,15 +163,85 @@ with RDKit; modification variants (N-methylation, lipid conjugation, halogenatio
 programmatically and their properties predicted. Buried vs solvent-exposed ligand atoms were
 determined from the bound pose (\lteq4.5\,\Ang{} to receptor).
 
-\textbf{3.5 MD/free-energy protocol [prospective].} A membrane MD system was prepared: receptor
-sidechains rebuilt (PDBFixer), protonation assigned by PROPKA at pH 7.4, and ZH853 protonated to $+1$
-and prepared for GAFF2/RESP parameterization. PROPKA places \textbf{D2.50 (Asp116) at pKa 7.61}, so
-parallel protonated/charged systems are built. The production protocol (POPC:cholesterol 9:1,
-ff19SB/Lipid21/OPC, CHARMM-GUI-style six-stage equilibration, LangevinMiddle 310\,K with a
-semi-isotropic membrane barostat, hydrogen-mass repartitioning at 4\,fs, $\ge$3 replicas) and
-free-energy calculations (relative FEP across the ZH850/831/809 analogs; ABFE and funnel metadynamics
-as exploratory) are released as a SLURM bundle. Given documented convergence difficulties for flexible
-macrocycles, free-energy results are framed as rank-ordering.
+The molecular-dynamics protocol below is prepared and released but not yet run
+\textbf{[prospective]}; the design choices and their justifications are given in full so the
+simulations are reproducible and the modeling assumptions explicit.
+
+\textbf{3.5 Choice of simulated systems.} We define two systems. \emph{System A} is the complete
+MOR + ZH853 + Gi($\alpha\beta\gamma$) assembly in an explicit bilayer; \emph{System B} is
+MOR + ZH853 alone with the intracellular half of the receptor Cα-restrained (or the G$\alpha$ C-terminal
+$\alpha$5 helix retained). The rationale is that the active receptor conformation ZH853 stabilizes is
+thermodynamically coupled to transducer engagement: removing the G protein entirely lets the
+cytoplasmic end of the 7TM bundle (notably TM6) relax toward inactive rotamers on accessible MD
+timescales, corrupting the very orthosteric geometry we set out to characterize
+[12]. Retaining the heterotrimer (System A) holds the active state
+\emph{without} artificial restraints and exposes allosteric coupling, at the cost of a large
+($\sim$200{,}000-atom) system; System B trades that fidelity for the throughput the free-energy
+calculations require, using minimal restraints to preserve activation. The scFv16 fragment is a
+cryo-EM chaperone of the G$\alpha$i--G$\beta$ interface with no physiological role and is removed so it
+cannot bias the dynamics. Because the D2.50 sodium-pocket aspartate lies at the activation-linked
+allosteric site [13] and its protonation is ambiguous at physiological pH
+(\S3.6), every system is built in both D2.50 protonation states.
+
+\textbf{3.6 Receptor and ligand preparation.} At 3.5\,\Ang{} many surface sidechains are
+under-determined; we rebuild the 45 truncated sidechains with PDBFixer [14] rather
+than leaving partial residues that would open spurious cavities or drop formal charges. Protonation is
+assigned by PROPKA at pH 7.4 [15]; the sole non-standard prediction is \textbf{D2.50
+(Asp116), pKa 7.61} --- essentially 1:1 protonated at physiological pH --- motivating the parallel-system
+design and constant-pH MD as the rigorous fallback. All four chain-R histidines are neutral; their
+HID/HIE tautomers are set from the local hydrogen-bond network because H6.52 and H7.36 line the pocket
+and a mis-assigned tautomer would perturb the interactions under study. The conserved ECL2--TM3
+disulfide (Cys142--Cys219) is enforced explicitly, and the truncated receptor termini are capped with
+neutral acetyl/\emph{N}-methylamide groups rather than charged termini, which would be artifacts on an
+internal transmembrane fragment. ZH853 is a macrocyclic peptide with D-amino acids and a
+side-chain-to-side-chain lactam --- outside the validated coverage of both general small-molecule force
+fields (not optimized for peptides) and protein force fields (which lack the non-canonical linkage). We
+therefore parameterize it by an Amber residue-library route: capped-dipeptide fragments per residue,
+multi-conformer RESP charges at HF/6-31G(d) [16] to match the derivation of the ff19SB
+protein charges it must interface with, GAFF2 [17] terms for novel side-chain chemistry,
+explicit D-chirality, and head-to-tail macrocycle closure; a whole-molecule GAFF2/AM1-BCC build and an
+independent OpenFF build serve as cross-checks. The physiologically dominant $+1$ state is used (the
+Tyr1 $\alpha$-amine that forms the D3.32 salt bridge; there is no free carboxylate). Because fixed-charge
+force fields reproduce macrocyclic \emph{cis}/\emph{trans} amide equilibria and ring-pucker populations
+poorly [18], production is augmented with enhanced sampling and, where data exist,
+validated against NMR.
+
+\textbf{3.7 Membrane, force field, and equilibration.} The receptor is pre-oriented to the bilayer
+normal with OPM/PPM [19] (consistent with the 84 modeled cholesterols) and embedded
+in a POPC:cholesterol (9:1) membrane using CHARMM-GUI Membrane Builder [20] --- a
+widely used minimal GPCR bilayer that captures cholesterol's documented modulation of class-A receptors
+[21] while remaining tractable; a higher-cholesterol asymmetric plasma-membrane mimic
+is run as a sensitivity check since MOR is cholesterol-sensitive. The Gi heterotrimer projects into the
+cytoplasmic water slab, so extra intracellular padding is added to prevent periodic-image
+self-interaction of the large soluble domain. We use \textbf{ff19SB + Lipid21 + OPC}
+[22, 23, 24] with 0.15\,M NaCl: ff19SB's residue-specific
+CMAP corrections improve backbone conformational balance and are calibrated with OPC water, so we
+deliberately avoid mismatching the water model to the protein force field --- a common, consequential
+error (CHARMM36m/CHARMM-GUI [25] is the validated alternative). Equilibration follows a
+six-stage schedule with positional restraints on protein and lipid heavy atoms released gradually
+(backbone 4000$\rightarrow$10, sidechain 2000$\rightarrow$0, lipid 1000$\rightarrow$0\,kJ\,mol$^{-1}$\,nm$^{-2}$)
+across NVT then NPT stages, letting lipids pack around the receptor and water reorganize before the
+solute is freed; abrupt restraint release is a known source of membrane artifacts.
+
+\textbf{3.8 Production and quality control.} Production (OpenMM [26]) uses a
+LangevinMiddle integrator at 310\,K with a MonteCarloMembraneBarostat (semi-isotropic, zero surface
+tension) so the bilayer area relaxes naturally, and hydrogen-mass repartitioning to enable a
+\textbf{4\,fs} timestep [27], roughly doubling throughput with no measurable cost to the
+observables of interest. We run \textbf{$\ge$3 independent replicas} of several hundred nanoseconds each,
+because convergence is judged from the agreement of independent trajectories and block-averaged errors
+rather than a single RMSD plateau, which can flatten while the ensemble is still unconverged
+[28]. Reported metrics are backbone C$\alpha$ RMSD/RMSF (aligned before RMSF),
+\emph{receptor-aligned} ligand RMSD (so it reports pocket escape rather than global drift), key-contact
+occupancy (D3.32, ECL2 Glu231, H6.52, H7.36, Y7.43), and membrane observables (area-per-lipid
+$\approx$0.65--0.68\,nm$^2$ for POPC, bilayer thickness, deuterium order parameters) benchmarked against
+experiment to validate the bilayer. Crucially, the contact occupancies convert the static census of
+Figure~\ref{fig:heatmap} into equilibrium probabilities, directly testing whether the ECL2 Glu231 salt
+bridge that distinguishes ZH853 is persistent or transient.
+
+\textbf{3.9 Free-energy calculations.} Relative FEP across the ZH850/831/809 analogs (with ABFE and
+funnel metadynamics as exploratory) is released as a SLURM bundle. Given documented convergence
+difficulties for flexible macrocycles, these are framed as rank-ordering rather than quantitative
+affinities.
 
 \emph{All analyses are scripted and version-controlled (Data \& code availability).}
 
@@ -379,6 +449,39 @@ in \texttt{SPECIFICATION.md}; detailed methods and results are in the \texttt{do
   \emph{Drug Discov Today} 2016.
 \bibitem{knudsen2019} Knudsen LB, Lau J. The discovery and development of semaglutide.
   \emph{Front Endocrinol} 2019;10:155.
+\bibitem{dror2011} Dror RO, et al. Activation mechanism of the \bt2-adrenergic receptor revealed by
+  molecular dynamics. \emph{Proc Natl Acad Sci USA} 2011;108:18684.
+\bibitem{katritch2014} Katritch V, et al. Allosteric sodium in class A GPCR signaling.
+  \emph{Trends Biochem Sci} 2014;39:233.
+\bibitem{pdbfixer} Eastman P, et al. PDBFixer (OpenMM tools). github.com/openmm/pdbfixer.
+\bibitem{propka3} Olsson MHM, S{\o}ndergaard CR, Rostkowski M, Jensen JH. PROPKA3: consistent
+  treatment of internal and surface residues. \emph{J Chem Theory Comput} 2011;7:525.
+\bibitem{resp} Bayly CI, Cieplak P, Cornell WD, Kollman PA. A well-behaved electrostatic potential
+  (RESP) charge model. \emph{J Phys Chem} 1993;97:10269.
+\bibitem{gaff} Wang J, Wolf RM, Caldwell JW, Kollman PA, Case DA. Development and testing of a general
+  amber force field. \emph{J Comput Chem} 2004;25:1157.
+\bibitem{damjanovic2021} Damjanovic J, Miao J, Huang H, Lin YS. Elucidating solution structures of
+  cyclic peptides using molecular dynamics. \emph{Chem Rev} 2021;121:2292.
+\bibitem{opm} Lomize MA, Pogozheva ID, Joo H, Mosberg HI, Lomize AL. OPM database and PPM server.
+  \emph{Nucleic Acids Res} 2012;40:D370.
+\bibitem{membranebuilder} Wu EL, et al. CHARMM-GUI Membrane Builder toward realistic biological
+  membrane simulations. \emph{J Comput Chem} 2014;35:1997.
+\bibitem{gimpl2016} Gimpl G. Interaction of cholesterol with G-protein-coupled receptors.
+  \emph{Chem Phys Lipids} 2016;199:61.
+\bibitem{ff19sb} Tian C, et al. ff19SB: amino-acid-specific protein backbone parameters.
+  \emph{J Chem Theory Comput} 2020;16:528.
+\bibitem{lipid21} Dickson CJ, Walker RC, Gould IR. Lipid21: complex lipid membrane simulations with
+  AMBER. \emph{J Chem Theory Comput} 2022;18:1726.
+\bibitem{opc} Izadi S, Anandakrishnan R, Onufriev AV. Building water models: a different approach (OPC).
+  \emph{J Phys Chem Lett} 2014;5:3863.
+\bibitem{charmm36m} Huang J, et al. CHARMM36m: an improved force field for folded and intrinsically
+  disordered proteins. \emph{Nat Methods} 2017;14:71.
+\bibitem{openmm} Eastman P, et al. OpenMM 7: rapid development of high-performance algorithms for
+  molecular dynamics. \emph{PLoS Comput Biol} 2017;13:e1005659.
+\bibitem{hmr} Hopkins CW, Le Grand S, Walker RC, Roitberg AE. Long-time-step molecular dynamics through
+  hydrogen mass repartitioning. \emph{J Chem Theory Comput} 2015;11:1864.
+\bibitem{grossfield2009} Grossfield A, Zuckerman DM. Quantifying uncertainty and sampling quality in
+  biomolecular simulations. \emph{Annu Rep Comput Chem} 2009;5:23.
 \end{thebibliography}
 
 \end{document}
