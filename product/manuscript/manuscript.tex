@@ -10,7 +10,9 @@
 \usepackage{authblk}
 \usepackage[hidelinks]{hyperref}
 \usepackage{caption}
+\usepackage{subcaption}
 \captionsetup{font=small,labelfont=bf}
+\renewcommand{\thesubfigure}{\Alph{subfigure}}  % panel labels A, B
 
 % --- convenience macros for recurring symbols (engine-agnostic) ---
 \newcommand{\uOR}{\textmu-opioid receptor}
@@ -76,12 +78,37 @@ antinociception and a reduced side-effect profile in rodents [1].
 
 Despite this promise, no structure of ZH853 --- or of any cyclic-peptide MOR complex --- has been
 reported, leaving open three questions this work addresses computationally from a 3.5\,\Ang{} cryo-EM
-structure of the MOR--ZH853--Gi--scFv16 complex: (1) \emph{what, if anything, is structurally
+structure of the MOR--ZH853--Gi--scFv16 complex (Figure~\ref{fig:complex}): (1) \emph{what, if anything,
+is structurally
 distinctive about how ZH853 engages MOR} relative to other agonists; (2) \emph{which receptor
 mutations would abrogate ZH853 while sparing related full agonists}, providing a pharmacological
 fingerprint and a route to mechanistic tests; and (3) \emph{how ZH853's drug-like properties could be
 improved}, drawing on modern peptide-drug strategies. We further establish and release a membrane
 molecular-dynamics (MD) and free-energy protocol to validate these structure-derived hypotheses.
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.365\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig6_molstar_overview.png}
+    \caption{}\label{fig:complex-a}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.60\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig7_molstar_pocket.png}
+    \caption{}\label{fig:complex-b}
+  \end{subfigure}
+  \caption{The experimentally characterized MOR--ZH853--Gi--scFv16 cryo-EM complex (Mol* renders).
+  \textbf{(A)} The whole complex in the canonical GPCR orientation --- extracellular face up,
+  intracellular G-protein interface down: \uOR{} receptor 7TM bundle (gold, top) with ZH853
+  (green sticks) in the extracellular orthosteric pocket, coupling to G$\alpha$i (orange),
+  G$\beta$ (teal) and G$\gamma$ (purple), with the scFv16 fragment (magenta).
+  \textbf{(B)} The orthosteric pocket: ZH853 (yellow ball-and-stick) with key receptor residues (blue)
+  as sticks, labeled by Ballesteros-Weinstein number; salt bridges (orange) to Asp3.32 and ECL2
+  Glu231 and H-bonds (blue) to Tyr7.43 and Asn2.63 are drawn as distance lines, the receptor cartoon
+  faded for context.}
+  \label{fig:complex}
+\end{figure}
 
 \section{Related work}
 
@@ -112,7 +139,7 @@ ZH853 as HETATM ligand L01 (E). The construct uses \textbf{human OPRM1 (UniProt 
 verified against all canonical orthosteric positions; mouse-numbered comparators were offset by $+2$
 to this frame. The ligand's 59 heavy atoms and formula (C$_{42}$H$_{51}$N$_9$O$_8$, 810\,Da) match the
 reference SMILES, confirming the monomeric macrocycle. The overall complex and the orthosteric pocket
-are shown in Figures~\ref{fig:overview} and~\ref{fig:pocket}.
+are shown in Figure~\ref{fig:complex}A,B.
 
 \textbf{3.2 Comparator set.} Thirteen structures were retrieved from the RCSB PDB: peptide agonists
 6DDE/8EFQ (DAMGO), 8F7R (endomorphin-1), 8F7Q (\bt-endorphin), 9WST/9WSV (DAMGO with Gz/\bt-arrestin);
@@ -256,27 +283,6 @@ correlates with ZH853's reported signaling bias.
   macrocycles differing by single-residue substitutions (Trp$\leftrightarrow$Phe, Glu$\leftrightarrow$Asp
   ring size, $\pm$Gly cap).}
   \label{fig:ligands}
-\end{figure}
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.78\linewidth]{figures/fig6_molstar_overview.png}
-  \caption{The experimentally characterized MOR--ZH853--Gi--scFv16 cryo-EM complex (Mol* render), in
-  the canonical GPCR orientation with the extracellular face up and the intracellular G-protein
-  interface down: \uOR{} receptor 7TM bundle (gold, top) with ZH853 (green sticks) in the extracellular
-  orthosteric pocket, coupling to G$\alpha$i (orange), G$\beta$ (teal), and G$\gamma$ (purple) below,
-  with the scFv16 fragment (magenta).}
-  \label{fig:overview}
-\end{figure}
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=0.9\linewidth]{figures/fig7_molstar_pocket.png}
-  \caption{Orthosteric pocket of the ZH853 complex (Mol* render): ZH853 (yellow ball-and-stick) with
-  key receptor residues (blue) as sticks, labeled by Ballesteros-Weinstein number. Salt bridges
-  (orange) to Asp3.32 and ECL2 Glu231 and H-bonds (blue) to Tyr7.43 and Asn2.63 are drawn as distance
-  lines; the receptor cartoon is faded for context.}
-  \label{fig:pocket}
 \end{figure}
 
 \begin{figure}[htbp]

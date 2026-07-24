@@ -66,7 +66,9 @@ interaction-map:  ## PoseView-style 2D interaction map -> product/ + manuscript 
 	python src/03.03.00_interaction_map.py
 
 molstar-render:  ## Headless MolStar 3D renders (needs npm install first) -> product/ + manuscript figs
-	cd src/03.10.00_molstar_render && npm install --silent && python ../../src/03.10.00_molstar_render/build_pocket_mvs.py && node render.js
+	cd src/03.10.00_molstar_render && npm install --silent \
+	  && python build_overview_camera.py && python build_pocket_mvs.py && node render.js \
+	  && python trim_figures.py
 
 figures: depictions interaction-map  ## Regenerate the vector figures (MolStar via molstar-render)
 
