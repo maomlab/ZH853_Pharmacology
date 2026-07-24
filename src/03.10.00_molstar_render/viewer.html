@@ -54,6 +54,21 @@
       await settle();
     }
 
+    // Apply a canonical-GPCR camera frame (extracellular up, G-protein down).
+    async function setOverviewCamera(c) {
+      const cam = window.viewer.plugin.canvas3d.camera;
+      const snap = cam.getSnapshot();
+      const fov = snap.fov || (Math.PI / 4);
+      const dist = (c.radius / Math.tan(fov / 2)) * 1.15;
+      const d = c.direction;
+      const position = [c.center[0] - d[0] * dist, c.center[1] - d[1] * dist, c.center[2] - d[2] * dist];
+      cam.setState(Object.assign({}, snap, {
+        target: c.center, position: position, up: c.up, radius: c.radius,
+      }), 0);
+      window.viewer.plugin.canvas3d.requestDraw();
+      await settle();
+    }
+
     // Scene: orthosteric pocket -- focus the ligand so MolStar renders surrounding
     // residues + non-covalent interactions (its focus representation).
     async function scenePocket() {

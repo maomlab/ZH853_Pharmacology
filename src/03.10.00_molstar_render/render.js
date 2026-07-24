@@ -42,6 +42,8 @@ async function shoot(page, name) {
   await page.evaluate((s) => loadPDB(s), full);
   await page.waitForFunction('window.loaded === true', { timeout: 120000 });
   await page.evaluate(() => sceneOverview());
+  const cam = JSON.parse(fs.readFileSync(path.join(HERE, 'overview_camera.json'), 'utf8'));
+  await page.evaluate((c) => setOverviewCamera(c), cam);
   await shoot(page, '03.10.00_molstar_overview_20260723.png');
 
   // --- Scene 2: orthosteric pocket + interactions (MolViewSpec) ---

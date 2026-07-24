@@ -16,6 +16,7 @@ data/comparators/*.pdb
 # Node / MolStar headless render deps + build artifacts (regenerate via npm install + render.js)
 node_modules/
 src/03.10.00_molstar_render/pocket.mvsj
+src/03.10.00_molstar_render/overview_camera.json
 
 # Intermediate / large simulation artifacts (kept out of VCS; regenerate via Makefile)
 intermediate/
