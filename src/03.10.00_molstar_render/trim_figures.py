@@ -48,21 +48,34 @@ def trim(src: Path, dst: Path) -> None:
     print(f"{dst.name}: trimmed -> {out.shape[1]}x{out.shape[0]}")
 
 
-def composite_membrane(src: Path, dst: Path) -> None:
-    """Paint a full-width bilayer band (cholesterol z-extent) behind the molecule, then crop."""
+def composite_membrane(src: Path, dst: Path, margin_frac: float = 0.03) -> None:
+    """Paint a bilayer band (cholesterol z-extent) behind the molecule, cropped TIGHT to the protein.
+
+    The crop is the molecule's bounding box (+ a small margin), NOT the band's -- so the band only
+    fills the tight crop and does not leave wide membrane-only strips on the sides.
+    """
     arr = np.asarray(_inset(Image.open(src).convert("RGB"))).copy()
+    molecule = (arr < 246).any(axis=2)                                     # protein + cholesterol + ligand
+    ys, xs = np.where(molecule)
+    if len(xs) == 0:
+        Image.fromarray(arr).save(dst)
+        return
+    x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()               # crop box = the molecule
+    mx, my = int(margin_frac * (x1 - x0)), int(margin_frac * (y1 - y0))
+    x0, y0 = max(0, x0 - mx), max(0, y0 - my)
+    x1, y1 = min(arr.shape[1] - 1, x1 + mx), min(arr.shape[0] - 1, y1 + my)
+
     r, g, b = arr[..., 0].astype(int), arr[..., 1].astype(int), arr[..., 2].astype(int)
-    orange = (r > 165) & (g > 65) & (g < 195) & (b < 100) & (r - b > 85)   # cholesterol
+    orange = (r > 165) & (g > 65) & (g < 195) & (b < 100) & (r - b > 85)   # cholesterol -> band rows
     rows = np.where(orange.any(axis=1))[0]
     if len(rows):
-        r0, r1 = int(rows.min()), int(rows.max())
-        molecule = (arr < 246).any(axis=2)
         band = np.zeros(arr.shape[:2], bool)
-        band[r0:r1 + 1, :] = True
-        arr[band & ~molecule] = BAND_RGB          # band only where the molecule is not (behind it)
-    out = _crop_to_content(arr)
+        band[int(rows.min()):int(rows.max()) + 1, :] = True
+        arr[band & ~molecule] = BAND_RGB                                  # band behind the molecule
+
+    out = arr[y0:y1 + 1, x0:x1 + 1]                                       # tight crop to the protein
     Image.fromarray(out).save(dst)
-    print(f"{dst.name}: membrane band + trim -> {out.shape[1]}x{out.shape[0]}")
+    print(f"{dst.name}: membrane band + tight crop -> {out.shape[1]}x{out.shape[0]}")
 
 
 def main() -> int:
