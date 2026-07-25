@@ -54,11 +54,23 @@ async function shoot(page, name) {
   await page.evaluate(() => settle());
   const pocket = await shoot(page, '03.10.00_molstar_pocket_20260723.png');
 
+  // --- Scene 3: membrane placement (MolViewSpec) ---
+  let membrane = null;
+  const memPath = path.join(HERE, 'membrane.mvsj');
+  if (fs.existsSync(memPath)) {
+    await page.evaluate(() => { window.loaded = false; window.viewer.plugin.clear(); });
+    await page.evaluate((s) => loadMVS(s), fs.readFileSync(memPath, 'utf8'));
+    await page.waitForFunction('window.loaded === true', { timeout: 120000 });
+    await page.evaluate(() => settle());
+    membrane = await shoot(page, '03.10.00_molstar_membrane_20260725.png');
+  }
+
   await browser.close();
 
   // copy to manuscript figures
   fs.copyFileSync(path.join(OUTDIR, '03.10.00_molstar_overview_20260723.png'),
     path.join(FIGDIR, 'fig6_molstar_overview.png'));
   fs.copyFileSync(pocket, path.join(FIGDIR, 'fig7_molstar_pocket.png'));
+  if (membrane) fs.copyFileSync(membrane, path.join(FIGDIR, 'fig_membrane_placement.png'));
   console.log('done');
 })().catch(e => { console.error(e); process.exit(1); });

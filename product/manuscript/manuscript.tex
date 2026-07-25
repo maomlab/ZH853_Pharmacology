@@ -169,7 +169,7 @@ simulations are reproducible and the modeling assumptions explicit.
 
 \textbf{3.5 Choice of simulated systems.} We define two systems. \emph{System A} is the complete
 MOR + ZH853 + Gi($\alpha\beta\gamma$) assembly in an explicit bilayer; \emph{System B} is
-MOR + ZH853 alone with the intracellular half of the receptor Cα-restrained (or the G$\alpha$ C-terminal
+MOR + ZH853 alone with the intracellular half of the receptor C$\alpha$-restrained (or the G$\alpha$ C-terminal
 $\alpha$5 helix retained). The rationale is that the active receptor conformation ZH853 stabilizes is
 thermodynamically coupled to transducer engagement: removing the G protein entirely lets the
 cytoplasmic end of the 7TM bundle (notably TM6) relax toward inactive rotamers on accessible MD
@@ -206,9 +206,18 @@ force fields reproduce macrocyclic \emph{cis}/\emph{trans} amide equilibria and 
 poorly [18], production is augmented with enhanced sampling and, where data exist,
 validated against NMR.
 
-\textbf{3.7 Membrane, force field, and equilibration.} The receptor is pre-oriented to the bilayer
-normal with OPM/PPM [19] (consistent with the 84 modeled cholesterols) and embedded
-in a POPC:cholesterol (9:1) membrane using CHARMM-GUI Membrane Builder [20] --- a
+\textbf{3.7 Membrane placement and force field.} We fix the bilayer position directly from the cryo-EM
+map rather than predicting it. The receptor's transmembrane principal axis (the long axis of the
+C$\alpha$ cloud) is rotated onto $z$; the \textbf{84 cholesterols modeled in the density} at the lipid-facing
+surface then set the bilayer geometry --- their mean $z$ defines the hydrophobic midplane ($z=0$) and
+their $\sim$28\,\Ang{} span sets the hydrophobic thickness, so the receptor is translated to seat the
+membrane midplane at the cholesterol centre and the transmembrane helices straddle the slab
+(Figure~\ref{fig:membrane}). Centring on the cholesterols rather than the C$\alpha$ centroid is essential:
+the receptor is asymmetric along $z$ (a bulky ECL2 and larger extracellular loops), so the C$\alpha$ centroid
+lies well off the true midplane and mis-registers the lipid head/tail planes during packing. This
+experimentally-anchored orientation is used for \texttt{PACKMOL-Memgen} (and corroborates an OPM/PPM
+prediction [19]). The receptor is embedded in a
+POPC:cholesterol (9:1) membrane using CHARMM-GUI Membrane Builder [20] --- a
 widely used minimal GPCR bilayer that captures cholesterol's documented modulation of class-A receptors
 [21] while remaining tractable; a higher-cholesterol asymmetric plasma-membrane mimic
 is run as a sensitivity check since MOR is cholesterol-sensitive. The Gi heterotrimer projects into the
@@ -244,6 +253,31 @@ difficulties for flexible macrocycles, these are framed as rank-ordering rather 
 affinities.
 
 \emph{All analyses are scripted and version-controlled (Data \& code availability).}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[b]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_membrane_placement.png}
+    \caption{}\label{fig:membrane-a}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/fig_membrane_determination.pdf}
+    \caption{}\label{fig:membrane-b}
+  \end{subfigure}
+  \caption{\textbf{Cryo-EM-anchored membrane placement.} \textbf{(A)} Side view (Mol* render) of the
+  oriented \uOR{} (grey cartoon) with the 84 cholesterols modeled in the density (orange, ball-and-stick)
+  and ZH853 (green). The cholesterols mark the lipid bilayer band directly: the transmembrane helices
+  span it, the intracellular loops hang below, and ZH853 sits at the extracellular boundary; the
+  midplane and thickness this defines are quantified in (B). \textbf{(B)} Determination: distribution
+  along the membrane normal $z$ of cholesterol atoms (orange) and receptor C$\alpha$ (grey). The
+  cholesterol mean fixes the midplane ($z=0$, solid line) and their span the hydrophobic thickness
+  ($\pm$14\,\Ang, dashed band); ZH853 (green) localizes to the extracellular leaflet. Centring on the
+  cholesterols rather than the C$\alpha$ centroid places the bilayer correctly despite the receptor's
+  $z$-asymmetry.}
+  \label{fig:membrane}
+\end{figure}
 
 \section{Results}
 

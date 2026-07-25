@@ -20,6 +20,7 @@ FIGDIR = PRODUCT / "manuscript" / "figures"
 PAIRS = [
     ("03.10.00_molstar_overview_20260723.png", "fig6_molstar_overview.png"),
     ("03.10.00_molstar_pocket_20260723.png", "fig7_molstar_pocket.png"),
+    ("03.10.00_molstar_membrane_20260725.png", "fig_membrane_placement.png"),
 ]
 
 

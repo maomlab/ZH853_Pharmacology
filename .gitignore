@@ -16,6 +16,7 @@ data/comparators/*.pdb
 # Node / MolStar headless render deps + build artifacts (regenerate via npm install + render.js)
 node_modules/
 src/03.10.00_molstar_render/pocket.mvsj
+src/03.10.00_molstar_render/membrane.mvsj
 src/03.10.00_molstar_render/overview_camera.json
 
 # Intermediate / large simulation artifacts (kept out of VCS; regenerate via Makefile)
@@ -43,12 +44,11 @@ src/02.10.00_slurm_bundle/*.out
 src/02.10.00_slurm_bundle/ligand_resp/*
 !src/02.10.00_slurm_bundle/ligand_resp/run_resp.sh
 
-# Regenerable dated MD-prep reports (a fresh date is written on each `make prep` re-run;
-# a committed snapshot already exists -- force-add a new date only to re-snapshot)
-product/02.01.00_prep_assessment_*.md
-product/02.02.00_protonation_*.md
-product/02.03.00_receptor_prep_*.md
-product/02.04.00_ligand_prep_*.md
+# Regenerable dated snapshots written directly in product/ on each `make` re-run (YYYYMMDD).
+# The tracked deliverables are product/manuscript/* (stable-named figures + the compiled PDF);
+# the committed baseline snapshots remain tracked. Force-add a new date only to re-snapshot.
+# (`*` does not cross `/`, so product/manuscript/... is unaffected.)
+product/*_20[0-9][0-9][0-9][0-9][0-9][0-9].*
 
 # OS / editor
 .DS_Store

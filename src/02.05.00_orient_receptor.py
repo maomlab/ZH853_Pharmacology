@@ -61,14 +61,26 @@ def main() -> int:
         return 1
 
     # Rotate normal -> z, then centre: xy on the receptor, z=0 on the cholesterol (membrane) midplane.
-    rot = u.atoms.positions @ r.T
     ca_xy = (ca.positions @ r.T)[:, :2].mean(axis=0)
     clr_z = float((clr.positions @ r.T)[:, 2].mean())
-    u.atoms.positions = rot - np.array([ca_xy[0], ca_xy[1], clr_z])
+    shift = np.array([ca_xy[0], ca_xy[1], clr_z])
+
+    def orient(atomgroup) -> None:
+        atomgroup.positions = atomgroup.positions @ r.T - shift
+
+    orient(u.atoms)
 
     out_dir = paths.ensure_dir(paths.INTERMEDIATE / "02.05.00_oriented")
     out = out_dir / "receptorR_oriented.pdb"
     u.atoms.write(str(out))
+
+    # Also emit the oriented complex (receptor + cholesterol + ligand) for the membrane-placement
+    # figure -- same transform. Requires prep-assess (02.01.00) to have written the components.
+    reclig = paths.INTERMEDIATE / "02.01.00_components" / "receptor_ligand.pdb"
+    if reclig.exists():
+        cx = structure.load(reclig)
+        orient(cx.atoms)
+        cx.atoms.write(str(out_dir / "complex_oriented.pdb"))
 
     caz = u.select_atoms("name CA").positions[:, 2]
     clr_span = float(np.ptp((clr.positions @ r.T)[:, 2]))
