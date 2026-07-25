@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Orient the rebuilt receptor to the membrane normal for PACKMOL-Memgen (Phase 2).
+"""Orient the receptor in the membrane by superposing onto an OPM/PPM reference (Phase 2).
 
-PACKMOL-Memgen's `--preoriented` assumes the membrane normal is along +z and the bilayer centre
-is at z=0. We rotate the TM-bundle principal axis onto z and centre on the modeled cholesterols.
+Best practice is the OPM/PPM transfer-energy method (community standard). Since our cryo-EM model
+is not itself in OPM, we transfer the placement structurally: fetch the OPM-oriented MOR reference
+(6DDF, MOR-Gi-DAMGO; membrane normal along z, midplane at z=0, boundaries marked by DUM pseudo-atoms
+-> hydrophobic thickness 31.4 A), superpose our receptor onto it (Kabsch on matched Ca), and apply
+the transform to the whole complex. PACKMOL-Memgen `--preoriented` is then valid and the membrane
+thickness comes from OPM, not the bound cholesterols.
 
-IMPORTANT: this is a quick structural proxy for a first-pass local build. For production the
-membrane should be placed with the OPM/PPM transfer-energy method (the community standard; hydrophobic
-thickness ~32 A for MOR, OPM 4DKL 32.0+/-1.0 A), NOT from the 3 cholesterols alone -- those bind at
-site-specific motifs and fix the midplane only to ~2 A. src/02.06.00 validates this placement against
-the Trp/Tyr aromatic girdle (~30 A) and experimental POPC thickness; see docs/METHODS_md_prep.md.
+If the OPM reference cannot be fetched (offline), falls back to a principal-axis + cholesterol-midplane
+proxy (clearly weaker; see docs/METHODS_md_prep.md and SPECIFICATION D-14). Either way, 02.06.00
+validates the placement against the Trp/Tyr aromatic girdle and experimental POPC thickness.
 
 Run (local analysis env): python src/02.05.00_orient_receptor.py
 """
@@ -16,7 +18,8 @@ Run (local analysis env): python src/02.05.00_orient_receptor.py
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, __file__.rsplit("/src/", 1)[0] + "/src")
 
@@ -25,19 +28,87 @@ import numpy as np  # noqa: E402
 from zh853mor import paths, structure  # noqa: E402
 
 IN_PDB = paths.INTERMEDIATE / "02.03.00_receptor" / "receptorR_fixed_heavy.pdb"
+COMPLEX_PDB = paths.INTERMEDIATE / "02.01.00_components" / "receptor_ligand.pdb"
+OPM_REF = "6ddf"  # MOR-Gi-DAMGO, OPM-oriented; DUM z = +/-15.7 -> 31.4 A hydrophobic thickness
+OPM_URL = f"https://opm-assets.storage.googleapis.com/pdb/{OPM_REF}.pdb"
+OPM_CACHE = paths.DATA / "opm" / f"{OPM_REF}.pdb"
 
 
-def rotation_onto_z(normal: np.ndarray) -> np.ndarray:
-    """Rotation matrix mapping the unit vector ``normal`` onto +z (Rodrigues)."""
-    n = normal / np.linalg.norm(normal)
+def fetch_opm() -> bool:
+    if OPM_CACHE.exists():
+        return True
+    paths.ensure_dir(OPM_CACHE.parent)
+    try:
+        with urllib.request.urlopen(OPM_URL, timeout=30) as r:  # noqa: S310 (trusted OPM host)
+            OPM_CACHE.write_bytes(r.read())
+        return True
+    except (urllib.error.URLError, TimeoutError) as exc:
+        print(f"WARNING: could not fetch OPM {OPM_REF}: {exc}", file=sys.stderr)
+        return False
+
+
+def ref_offset(ref_rec) -> int:
+    """Residue offset to add to OUR (human) resid to index the reference (0 human, -2 mouse)."""
+    by_id = {int(a.resid): a.resname for a in ref_rec if a.name == "CA"}
+    if by_id.get(149) == "ASP" and by_id.get(328) == "TYR":
+        return 0
+    if by_id.get(147) == "ASP" and by_id.get(326) == "TYR":
+        return -2
+    raise ValueError("reference numbering not recognized (no D3.32/Y7.43 landmark)")
+
+
+def kabsch(p: np.ndarray, q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Rotation R and translation t mapping points p onto q (least-squares)."""
+    pc, qc = p - p.mean(0), q - q.mean(0)
+    u, _, vt = np.linalg.svd(pc.T @ qc)
+    d = np.sign(np.linalg.det(vt.T @ u.T))
+    r = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+    return r, q.mean(0) - r @ p.mean(0)
+
+
+def opm_orient(u):
+    """Superpose our receptor onto the OPM reference; return (R, t, thickness, rmsd) or None."""
+    if not fetch_opm():
+        return None
+    ref = structure.load(OPM_CACHE)
+    ref_rec = ref.select_atoms("segid R and protein")
+    if not len(ref_rec):
+        ref_rec = ref.select_atoms("chainID R and protein")
+    off = ref_offset(ref_rec)
+    dum = ref.select_atoms("resname DUM")
+    thickness = float(np.ptp(dum.positions[:, 2])) if len(dum) else float("nan")
+
+    our_ca = {int(a.resid): a.position for a in u.select_atoms("segid R and name CA")}
+    ref_ca = {int(a.resid): a.position for a in ref_rec.select_atoms("name CA")}
+    common = sorted(r for r in our_ca if (r + off) in ref_ca)
+    if len(common) < 50:
+        print(f"WARNING: only {len(common)} matched Ca; skipping OPM orient", file=sys.stderr)
+        return None
+    p = np.array([our_ca[r] for r in common])
+    q = np.array([ref_ca[r + off] for r in common])
+    r, t = kabsch(p, q)
+    rmsd = float(np.sqrt((((p @ r.T + t) - q) ** 2).sum(axis=1).mean()))
+    return r, t, thickness, rmsd
+
+
+def principal_axis_fallback(u):
+    """Weaker proxy: normal = TM principal axis; midplane = cholesterol centre."""
+    ca = u.select_atoms("segid R and name CA")
+    x = ca.positions - ca.positions.mean(0)
+    normal = np.linalg.svd(x, full_matrices=False)[2][0]
     z = np.array([0.0, 0.0, 1.0])
-    v = np.cross(n, z)
-    s = np.linalg.norm(v)
-    c = float(np.dot(n, z))
-    if s < 1e-8:  # already aligned (c=+1) or anti-aligned (c=-1)
-        return np.eye(3) if c > 0 else np.diag([1.0, -1.0, -1.0])
-    vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-    return np.eye(3) + vx + vx @ vx * ((1 - c) / (s * s))
+    v = np.cross(normal, z)
+    s, c = np.linalg.norm(v), float(np.dot(normal, z))
+    if s < 1e-8:
+        r = np.eye(3) if c > 0 else np.diag([1.0, -1.0, -1.0])
+    else:
+        vx = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        r = np.eye(3) + vx + vx @ vx * ((1 - c) / (s * s))
+    orig = structure.load(paths.CRYOEM_PDB)
+    clr = orig.select_atoms("segid R and resname CLR")
+    ca_xy = (ca.positions @ r.T)[:, :2].mean(0)
+    clr_z = float((clr.positions @ r.T)[:, 2].mean())
+    return r, -np.array([ca_xy[0], ca_xy[1], clr_z])   # t: xy on receptor, z=0 at cholesterol midplane
 
 
 def main() -> int:
@@ -45,51 +116,33 @@ def main() -> int:
         print(f"ERROR: {IN_PDB} not found -- run `make prep-receptor` first.", file=sys.stderr)
         return 1
     u = structure.load(IN_PDB)
-    ca = u.select_atoms("name CA")
 
-    # membrane normal = TM-bundle principal axis (rebuilt receptor is in the deposited frame)
-    x = ca.positions - ca.positions.mean(axis=0)
-    normal = np.linalg.svd(x, full_matrices=False)[2][0]
-    r = rotation_onto_z(normal)
+    result = opm_orient(u)
+    if result is not None:
+        r, t, thickness, rmsd = result
+        method = f"OPM ({OPM_REF.upper()}); hydrophobic thickness {thickness:.1f} A; " \
+                 f"superposition RMSD {rmsd:.2f} A over the receptor"
+    else:
+        r, t = principal_axis_fallback(u)
+        thickness = float("nan")
+        method = "FALLBACK principal-axis + cholesterol midplane (OPM unavailable; weaker)"
 
-    # membrane MIDPLANE from the 3 modeled cholesterols (84 atoms) in the deposited structure (same frame),
-    # NOT the Cα centroid -- the receptor is asymmetric along z, so the Cα centroid is offset from
-    # the bilayer centre and mis-places packmol-memgen's head/tail planes.
-    orig = structure.load(paths.CRYOEM_PDB)
-    clr = orig.select_atoms("segid R and resname CLR")
-    if not len(clr):
-        print("ERROR: no cholesterol (CLR) in the deposited model to define the membrane centre.",
-              file=sys.stderr)
-        return 1
+    def apply(ag) -> None:
+        ag.positions = ag.positions @ r.T + t
 
-    # Rotate normal -> z, then centre: xy on the receptor, z=0 on the cholesterol (membrane) midplane.
-    ca_xy = (ca.positions @ r.T)[:, :2].mean(axis=0)
-    clr_z = float((clr.positions @ r.T)[:, 2].mean())
-    shift = np.array([ca_xy[0], ca_xy[1], clr_z])
-
-    def orient(atomgroup) -> None:
-        atomgroup.positions = atomgroup.positions @ r.T - shift
-
-    orient(u.atoms)
-
+    apply(u.atoms)
     out_dir = paths.ensure_dir(paths.INTERMEDIATE / "02.05.00_oriented")
-    out = out_dir / "receptorR_oriented.pdb"
-    u.atoms.write(str(out))
-
-    # Also emit the oriented complex (receptor + cholesterol + ligand) for the membrane-placement
-    # figure -- same transform. Requires prep-assess (02.01.00) to have written the components.
-    reclig = paths.INTERMEDIATE / "02.01.00_components" / "receptor_ligand.pdb"
-    if reclig.exists():
-        cx = structure.load(reclig)
-        orient(cx.atoms)
+    u.atoms.write(str(out_dir / "receptorR_oriented.pdb"))
+    if COMPLEX_PDB.exists():
+        cx = structure.load(COMPLEX_PDB)
+        apply(cx.atoms)
         cx.atoms.write(str(out_dir / "complex_oriented.pdb"))
 
-    caz = u.select_atoms("name CA").positions[:, 2]
-    clr_span = float(np.ptp((clr.positions @ r.T)[:, 2]))
-    print(f"Oriented normal -> +z; membrane midplane (cholesterol) at z=0; wrote {out}")
-    print(f"CA z-extent = {float(np.ptp(caz)):.1f} A; membrane extends {caz.min():.1f}..{caz.max():.1f} "
-          f"around z=0 (cholesterol z-span {clr_span:.1f} A)")
-    print("NOTE: --preoriented is now valid. For production, PPM/OPM is the rigorous alternative.")
+    caz = u.select_atoms("segid R and name CA").positions[:, 2]
+    print(f"Oriented by {method}")
+    print(f"Membrane normal -> z, midplane at z=0; receptor Ca z-extent {np.ptp(caz):.1f} A")
+    print("Validate the thickness with `make membrane-plot` (02.06.00). For a definitive per-structure")
+    print("value, submit this model to the PPM 3.0 server (opm.phar.umich.edu/ppm_server).")
     return 0
 
 

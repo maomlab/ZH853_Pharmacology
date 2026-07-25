@@ -206,21 +206,21 @@ force fields reproduce macrocyclic \emph{cis}/\emph{trans} amide equilibria and 
 poorly [18], production is augmented with enhanced sampling and, where data exist,
 validated against NMR.
 
-\textbf{3.7 Membrane placement and force field.} The receptor is oriented in the bilayer by the standard
-\textbf{OPM/PPM transfer-energy method} [19, 29], which minimizes the water-to-membrane transfer free
-energy of the rigid structure and reports a hydrophobic thickness precise to $\sim$1\,\Ang; OPM assigns
-MOR a hydrophobic thickness of \textbf{$\sim$32\,\Ang} (4DKL, 32.0$\pm$1.0\,\Ang; class-A GPCRs
-31--35\,\Ang), the value we build to. We do \emph{not} derive the membrane from the resolved lipids
-alone: the 3 cholesterols bind at site-specific motifs, each spans only about one leaflet, and a
-3-molecule sample fixes the midplane only to $\sim$2\,\Ang{} --- so they are a corroboration, not a ruler.
-We therefore cross-check the placement against two features of our own map (Figure~\ref{fig:membrane}):
-the \textbf{Trp/Tyr aromatic girdle} --- the interfacial residues that snorkel to the two headgroup
-regions [30] --- forms two bands $\sim$30\,\Ang{} apart (interfaces at $z\approx+13$ and $-17$\,\Ang) about
-the receptor mid-membrane, and the 3 modeled cholesterols span $\sim$28\,\Ang; both bracket the OPM slab.
-This inferred hydrophobic core ($\sim$28--30\,\Ang) is consistent with the experimental POPC
-hydrocarbon-core thickness (2$D_c$=28.8\,\Ang [31]) and, allowing for the cholesterol condensing effect
-($+2$--$4$\,\Ang{} for a POPC-like bilayer), with the $\sim$31--32\,\Ang{} slab used for building
-(phosphate-to-phosphate span $\sim$37--40\,\Ang). The receptor is embedded in a
+\textbf{3.7 Membrane placement and force field.} The receptor is placed in the bilayer by the standard
+\textbf{OPM/PPM transfer-energy method} [19, 29]. Because our cryo-EM model is not itself in OPM, we
+transfer the placement structurally: our receptor is superposed (C$\alpha$ Kabsch, RMSD 1.1\,\Ang) onto
+the OPM-oriented MOR--Gi--DAMGO reference (6DDF), whose membrane boundaries (DUM pseudo-atoms) give a
+\textbf{hydrophobic thickness of 31.4\,\Ang} --- consistent with OPM across active MOR structures
+(31--35\,\Ang; 4DKL 32.0$\pm$1.0\,\Ang) and adopted as the build target. We do \emph{not} derive the
+membrane from the resolved lipids: the 3 cholesterols bind at site-specific motifs, each spans about one
+leaflet, and 3 molecules fix the midplane only to $\sim$2\,\Ang. Two features of our own map corroborate
+the OPM placement (Figure~\ref{fig:membrane}): the \textbf{Trp/Tyr aromatic girdle} --- interfacial
+residues that snorkel to the headgroup regions [30] --- forms two bands $\sim$30\,\Ang{} apart (interfaces
+at $z\approx+13$ and $-17$\,\Ang), and the cholesterols span $\sim$33\,\Ang{} about the OPM midplane; both
+bracket the 31.4\,\Ang{} slab. This thickness matches the experimental POPC hydrocarbon core
+(2$D_c$=28.8\,\Ang [31]) plus the cholesterol condensing effect ($+2$--$4$\,\Ang{} for a POPC-like
+bilayer), within a phosphate-to-phosphate span of $\sim$37--40\,\Ang. For a definitive per-structure
+value the model can be submitted to the PPM~3.0 server. The receptor is embedded in a
 POPC:cholesterol (9:1) membrane using CHARMM-GUI Membrane Builder [20] --- a
 widely used minimal GPCR bilayer that captures cholesterol's documented modulation of class-A receptors
 [21] while remaining tractable; a higher-cholesterol asymmetric plasma-membrane mimic
@@ -274,13 +274,12 @@ affinities.
   the oriented \uOR{} (grey cartoon) with the 3 modeled cholesterols (84 atoms; orange, ball-and-stick)
   and ZH853 (green). The \textbf{tan band is the inferred hydrophobic core} (\S3.7), drawn behind the
   receptor: the transmembrane helices span it and the cholesterols sit within it, while the intracellular
-  loops fall below and ZH853 sits at the extracellular boundary. \textbf{(B)} Cross-check along the
-  membrane normal $z$: receptor C$\alpha$ (grey), cholesterols (orange), ZH853 (green), and the Trp/Tyr
-  aromatic girdle (purple diamonds; interfaces dotted). The aromatic girdle ($\sim$30\,\Ang) and the
-  cholesterol span ($\sim$28\,\Ang, dashed) bracket the OPM hydrophobic thickness for MOR
-  (32$\pm$1\,\Ang) and the experimental POPC hydrocarbon core (2$D_c$=28.8\,\Ang); ZH853 localizes to the
-  extracellular leaflet. The inferred core is thus physically reasonable; production builds to the OPM
-  $\sim$32\,\Ang{} slab (inset).}
+  loops fall below and ZH853 sits at the extracellular boundary. \textbf{(B)} Placement cross-check along
+  the membrane normal $z$: receptor C$\alpha$ (grey), cholesterols (orange), ZH853 (green), and the
+  Trp/Tyr aromatic girdle (purple diamonds; interfaces dotted). The \textbf{OPM slab} (yellow band,
+  31.4\,\Ang, from the 6DDF superposition) is bracketed by the aromatic girdle ($\sim$30\,\Ang) and the
+  cholesterol span ($\sim$33\,\Ang, dashed), and matches the experimental POPC hydrocarbon core
+  (2$D_c$=28.8\,\Ang); ZH853 localizes to the extracellular leaflet, confirming the orientation.}
   \label{fig:membrane}
 \end{figure}
 

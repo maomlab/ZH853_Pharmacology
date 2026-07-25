@@ -31,7 +31,8 @@ from zh853mor import paths, structure  # noqa: E402
 ORIENTED = paths.INTERMEDIATE / "02.05.00_oriented" / "complex_oriented.pdb"
 TRP_RING = ["CG", "CD1", "NE1", "CE2", "CD2", "CE3", "CZ2", "CZ3", "CH2"]
 TYR_RING = ["CG", "CD1", "CD2", "CE1", "CE2", "CZ", "OH"]
-OPM_MOR = 32.0            # OPM hydrophobic thickness for MOR (4DKL), +/-1.0 A
+OPM_HALF = 15.7          # OPM 6DDF DUM boundary (the reference used for orientation) -> 31.4 A
+OPM_MOR = 2 * OPM_HALF   # OPM hydrophobic thickness, MOR-Gi-DAMGO (6DDF)
 POPC_CORE = 28.8         # POPC hydrocarbon core 2Dc (Kucerka 2011)
 
 
@@ -75,9 +76,11 @@ def main() -> int:
     ax.scatter(np.full(arom_z.shape, xr[1] + 2), arom_z, marker="D", s=22, c="#7b3fa0",
                label="Trp/Tyr ring", zorder=5, clip_on=False)
 
-    # cholesterol slab (thin) and aromatic/OPM slab (recommended)
-    ax.axhspan(-chol_half, chol_half, color="#f2c811", alpha=0.13, zorder=0)
+    # OPM slab (the membrane built to) as the primary band; cholesterol + aromatic as cross-checks
+    ax.axhspan(-OPM_HALF, OPM_HALF, color="#f2c811", alpha=0.14, zorder=0, label="OPM slab")
     ax.axhline(0, color="#333", lw=1.0, ls="-", zorder=1)
+    for zc in (OPM_HALF, -OPM_HALF):
+        ax.axhline(zc, color="#b8860b", lw=1.3, ls="-", zorder=1)
     for zc in (chol_half, -chol_half):
         ax.axhline(zc, color="#e8820c", lw=1, ls="--", zorder=1)
     for zc in (up, lo):
@@ -86,14 +89,14 @@ def main() -> int:
     ax.annotate("intracellular", xy=(xr[0], -35), fontsize=8, style="italic")
     ax.set_xlabel("lateral position (Å)")
     ax.set_ylabel("position along membrane normal, z (Å)")
-    ax.set_title("Membrane placement: cholesterol vs aromatic girdle")
+    ax.set_title("Membrane placement: OPM slab vs aromatic girdle vs cholesterol")
     ax.legend(loc="lower left", fontsize=7.5, framealpha=0.9)
 
     # thickness comparison box
     txt = ("hydrophobic thickness\n"
-           f"cholesterol span:  {2 * chol_half:.0f} Å\n"
+           f"OPM 6DDF (build):  {OPM_MOR:.0f} Å\n"
            f"Trp/Tyr girdle:    {arom_thick:.0f} Å\n"
-           f"OPM MOR (4DKL):    {OPM_MOR:.0f}±1 Å\n"
+           f"cholesterol span:  {2 * chol_half:.0f} Å\n"
            f"POPC 2Dc (expt):   {POPC_CORE:.0f} Å")
     ax.text(0.98, 0.02, txt, transform=ax.transAxes, ha="right", va="bottom", fontsize=7.5,
             family="monospace", bbox={"boxstyle": "round", "fc": "white", "ec": "#999", "alpha": 0.9})
@@ -117,7 +120,7 @@ def main() -> int:
     plt.close(fig)
     print(f"cholesterol span {2 * chol_half:.1f} A (midplane {clr.positions[:, 2].mean():.1f}); "
           f"aromatic girdle {arom_thick:.1f} A (interfaces {lo:.1f}, {up:.1f})")
-    print(f"OPM MOR reference {OPM_MOR:.0f}+/-1 A; POPC 2Dc {POPC_CORE:.0f} A -> build slab ~31-32 A")
+    print(f"OPM 6DDF slab {OPM_MOR:.1f} A (build target); POPC 2Dc {POPC_CORE:.1f} A (Kucerka 2011)")
     print(f"Wrote {pdf} and manuscript fig_membrane_determination.pdf")
     return 0
 
