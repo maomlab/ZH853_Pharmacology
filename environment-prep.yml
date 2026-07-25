@@ -7,13 +7,15 @@ name: zh853mor-prep
 channels:
   - conda-forge
 dependencies:
-  - ambertools                  # tleap, antechamber, parmchk2, PACKMOL-Memgen
+  - python=3.12                 # openbabel has no 3.14 build yet; 3.12 suits ambertools+openff too
+  - ambertools                  # tleap, antechamber, parmchk2, PACKMOL-Memgen (also provides `reduce`)
   - openbabel                   # PACKMOL-Memgen calls obabel for PDB handling (required)
-  - reduce                      # protonation helper PACKMOL-Memgen looks for in $AMBERHOME/bin
   - parmed
   - rdkit
   - mdanalysis
   - numpy
   - openff-toolkit              # optional: OpenFF Interchange route for the ligand
-# NOTE: do NOT also `module load amber` -- a second AmberTools conflicts with this env's
-# AMBERHOME and breaks tool discovery (packmol-memgen: "reduce not available").
+# NOTES:
+#  - `reduce` is bundled in ambertools ($AMBERHOME/bin/reduce); there is no conda-forge `reduce`.
+#    The earlier "reduce not available" warning was the AMBERHOME/module clash, not a missing pkg.
+#  - Do NOT also `module load amber` -- a second AmberTools breaks tool discovery in this env.
