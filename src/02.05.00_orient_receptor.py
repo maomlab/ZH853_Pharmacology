@@ -59,7 +59,7 @@ def main() -> int:
     all_atoms.write(str(out))
 
     # report: TM span should now lie along z
-    zspan = float(u.select_atoms("name CA").positions[:, 2].ptp())
+    zspan = float(np.ptp(u.select_atoms("name CA").positions[:, 2]))
     print(f"Oriented normal -> +z; wrote {out}")
     print(f"CA z-extent (membrane-spanning length) = {zspan:.1f} A")
     print("NOTE: --preoriented is now valid for this file. For production, prefer PPM/OPM.")
