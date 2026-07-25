@@ -21,7 +21,7 @@
         lint format typecheck test check \
         fetch \
         qc interactions mutations analogs design interaction-map depictions analysis \
-        prep-assess prep-protonation prep-receptor prep-ligand prep \
+        prep-assess prep-protonation prep-receptor prep-orient prep-ligand prep \
         molstar-render figures manuscript clean-intermediate
 
 help:  ## Show this grouped target list
@@ -94,10 +94,13 @@ prep-protonation:  ## PROPKA protonation states -> product/
 prep-receptor:  ## Rebuild receptor sidechains (PDBFixer) -> intermediate/
 	python src/02.03.00_prepare_receptor.py
 
+prep-orient: prep-receptor  ## Orient receptor to membrane normal (z) for PACKMOL-Memgen --preoriented
+	python src/02.05.00_orient_receptor.py
+
 prep-ligand:  ## Protonated ZH853 + parameterization inputs -> intermediate/
 	python src/02.04.00_ligand_prep.py
 
-prep: prep-assess prep-protonation prep-receptor prep-ligand  ## Run the full Phase-2 local prep
+prep: prep-assess prep-protonation prep-receptor prep-orient prep-ligand  ## Run the full Phase-2 local prep
 
 ## Figures & manuscript  [local env; molstar-render also needs Node.js >= 18]
 molstar-render: prep-assess  ## Headless MolStar 3D renders -> manuscript fig6,7 (needs Node.js)

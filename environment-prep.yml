@@ -8,8 +8,12 @@ channels:
   - conda-forge
 dependencies:
   - ambertools                  # tleap, antechamber, parmchk2, PACKMOL-Memgen
+  - openbabel                   # PACKMOL-Memgen calls obabel for PDB handling (required)
+  - reduce                      # protonation helper PACKMOL-Memgen looks for in $AMBERHOME/bin
   - parmed
   - rdkit
   - mdanalysis
   - numpy
   - openff-toolkit              # optional: OpenFF Interchange route for the ligand
+# NOTE: do NOT also `module load amber` -- a second AmberTools conflicts with this env's
+# AMBERHOME and breaks tool discovery (packmol-memgen: "reduce not available").
