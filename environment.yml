@@ -6,12 +6,12 @@ channels:
   - conda-forge
 dependencies:
   - python=3.10
-  - numpy
+  - numpy>=2                 # code is NumPy 2.0 clean (no removed aliases/methods)
   - scipy
   - pandas
   - matplotlib
   - rdkit
-  - mdanalysis
+  - mdanalysis>=2.7          # MDAnalysis <2.7 does not support NumPy 2.0
   - biotite
   - mdtraj
   - pdbfixer          # receptor rebuild (Phase 2 prep)
