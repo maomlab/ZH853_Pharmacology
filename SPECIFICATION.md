@@ -52,6 +52,13 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   `openmmforcefields>=0.16` needs openmm>=8.5.1 while `openmm-plumed` (latest) supports only openmm<=8.4,
   so they are unsatisfiable together; splitting by task resolves it and keeps every capability. Python is
   left unpinned so conda tracks the latest openmm (needs >=3.12). (2026-07-24)
+- **D-14 (membrane placement — supersedes the cholesterol-primary approach):** Production orientation uses
+  **OPM/PPM** (transfer-energy minimization, the community standard); hydrophobic thickness **~32 Å for MOR**
+  (OPM 4DKL 32.0±1.0 Å; class-A GPCRs 31–35 Å), the value built to. The local `02.05.00` cholesterol-centred
+  orientation is a first-pass proxy only (3 site-specific cholesterols fix the midplane to ~2 Å; their ~28 Å
+  span ≈ the POPC hydrocarbon core 2Dc=28.8 Å [Kučerka 2011] and is thin). Placement is cross-checked in
+  `02.06.00` against the **Trp/Tyr aromatic girdle** (~30 Å, agrees with OPM) and experiment. Reason: bound
+  cholesterols are a weak, biased ruler; OPM/PPM + the aromatic belt are the recognized methods. (2026-07-25)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which

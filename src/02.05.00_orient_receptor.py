@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Orient the rebuilt receptor to the membrane normal for PACKMOL-Memgen (Phase 2).
 
-PACKMOL-Memgen's `--preoriented` assumes the protein's membrane normal is along +z and the
-bilayer centre is at z=0. The deposited/rebuilt receptor is still in the cryo-EM frame, so we
-rotate the TM-bundle principal axis onto z and centre the CA cloud at the origin.
+PACKMOL-Memgen's `--preoriented` assumes the membrane normal is along +z and the bilayer centre
+is at z=0. We rotate the TM-bundle principal axis onto z and centre on the modeled cholesterols.
 
-This is a deterministic default; for production, PPM/OPM orientation (which uses the actual
-membrane-insertion energetics) is preferred -- see the note in 01_build_system.sh.
+IMPORTANT: this is a quick structural proxy for a first-pass local build. For production the
+membrane should be placed with the OPM/PPM transfer-energy method (the community standard; hydrophobic
+thickness ~32 A for MOR, OPM 4DKL 32.0+/-1.0 A), NOT from the 3 cholesterols alone -- those bind at
+site-specific motifs and fix the midplane only to ~2 A. src/02.06.00 validates this placement against
+the Trp/Tyr aromatic girdle (~30 A) and experimental POPC thickness; see docs/METHODS_md_prep.md.
 
 Run (local analysis env): python src/02.05.00_orient_receptor.py
 """

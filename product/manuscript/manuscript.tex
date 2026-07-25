@@ -206,18 +206,21 @@ force fields reproduce macrocyclic \emph{cis}/\emph{trans} amide equilibria and 
 poorly [18], production is augmented with enhanced sampling and, where data exist,
 validated against NMR.
 
-\textbf{3.7 Membrane placement and force field.} We fix the bilayer position directly from the cryo-EM
-map rather than predicting it. The receptor's transmembrane principal axis (the long axis of the
-C$\alpha$ cloud) is rotated onto $z$; the \textbf{3 cholesterols modeled in the density} (84 atoms) at the
-lipid-facing surface then set the bilayer geometry --- their mean $z$ defines the hydrophobic midplane
-($z=0$) and
-their $\sim$28\,\Ang{} span sets the hydrophobic thickness, so the receptor is translated to seat the
-membrane midplane at the cholesterol centre and the transmembrane helices straddle the slab
-(Figure~\ref{fig:membrane}). Centring on the cholesterols rather than the C$\alpha$ centroid is essential:
-the receptor is asymmetric along $z$ (a bulky ECL2 and larger extracellular loops), so the C$\alpha$ centroid
-lies well off the true midplane and mis-registers the lipid head/tail planes during packing. This
-experimentally-anchored orientation is used for \texttt{PACKMOL-Memgen} (and corroborates an OPM/PPM
-prediction [19]). The receptor is embedded in a
+\textbf{3.7 Membrane placement and force field.} The receptor is oriented in the bilayer by the standard
+\textbf{OPM/PPM transfer-energy method} [19, 29], which minimizes the water-to-membrane transfer free
+energy of the rigid structure and reports a hydrophobic thickness precise to $\sim$1\,\Ang; OPM assigns
+MOR a hydrophobic thickness of \textbf{$\sim$32\,\Ang} (4DKL, 32.0$\pm$1.0\,\Ang; class-A GPCRs
+31--35\,\Ang), the value we build to. We do \emph{not} derive the membrane from the resolved lipids
+alone: the 3 cholesterols bind at site-specific motifs, each spans only about one leaflet, and a
+3-molecule sample fixes the midplane only to $\sim$2\,\Ang{} --- so they are a corroboration, not a ruler.
+We therefore cross-check the placement against two features of our own map (Figure~\ref{fig:membrane}):
+the \textbf{Trp/Tyr aromatic girdle} --- the interfacial residues that snorkel to the two headgroup
+regions [30] --- forms two bands $\sim$30\,\Ang{} apart (interfaces at $z\approx+13$ and $-17$\,\Ang) about
+the receptor mid-membrane, and the 3 modeled cholesterols span $\sim$28\,\Ang; both bracket the OPM slab.
+This inferred hydrophobic core ($\sim$28--30\,\Ang) is consistent with the experimental POPC
+hydrocarbon-core thickness (2$D_c$=28.8\,\Ang [31]) and, allowing for the cholesterol condensing effect
+($+2$--$4$\,\Ang{} for a POPC-like bilayer), with the $\sim$31--32\,\Ang{} slab used for building
+(phosphate-to-phosphate span $\sim$37--40\,\Ang). The receptor is embedded in a
 POPC:cholesterol (9:1) membrane using CHARMM-GUI Membrane Builder [20] --- a
 widely used minimal GPCR bilayer that captures cholesterol's documented modulation of class-A receptors
 [21] while remaining tractable; a higher-cholesterol asymmetric plasma-membrane mimic
@@ -267,17 +270,17 @@ affinities.
     \includegraphics[width=\linewidth]{figures/fig_membrane_determination.pdf}
     \caption{}\label{fig:membrane-b}
   \end{subfigure}
-  \caption{\textbf{Cryo-EM-anchored membrane placement.} \textbf{(A)} Side view (Mol* render) of the
-  oriented \uOR{} (grey cartoon) with the 3 modeled cholesterols (84 atoms; orange, ball-and-stick) and ZH853
-  (green). The \textbf{tan band is the inferred bilayer} --- the cholesterol-defined midplane and
-  hydrophobic thickness (\S3.7) --- drawn behind the receptor as a placement sanity check: the
-  transmembrane helices span it and the cholesterols sit within it, while the intracellular loops fall
-  below and ZH853 sits at the extracellular boundary. \textbf{(B)} Determination: distribution
-  along the membrane normal $z$ of cholesterol atoms (orange) and receptor C$\alpha$ (grey). The
-  cholesterol mean fixes the midplane ($z=0$, solid line) and their span the hydrophobic thickness
-  ($\pm$14\,\Ang, dashed band); ZH853 (green) localizes to the extracellular leaflet. Centring on the
-  cholesterols rather than the C$\alpha$ centroid places the bilayer correctly despite the receptor's
-  $z$-asymmetry.}
+  \caption{\textbf{Membrane placement and thickness validation.} \textbf{(A)} Side view (Mol* render) of
+  the oriented \uOR{} (grey cartoon) with the 3 modeled cholesterols (84 atoms; orange, ball-and-stick)
+  and ZH853 (green). The \textbf{tan band is the inferred hydrophobic core} (\S3.7), drawn behind the
+  receptor: the transmembrane helices span it and the cholesterols sit within it, while the intracellular
+  loops fall below and ZH853 sits at the extracellular boundary. \textbf{(B)} Cross-check along the
+  membrane normal $z$: receptor C$\alpha$ (grey), cholesterols (orange), ZH853 (green), and the Trp/Tyr
+  aromatic girdle (purple diamonds; interfaces dotted). The aromatic girdle ($\sim$30\,\Ang) and the
+  cholesterol span ($\sim$28\,\Ang, dashed) bracket the OPM hydrophobic thickness for MOR
+  (32$\pm$1\,\Ang) and the experimental POPC hydrocarbon core (2$D_c$=28.8\,\Ang); ZH853 localizes to the
+  extracellular leaflet. The inferred core is thus physically reasonable; production builds to the OPM
+  $\sim$32\,\Ang{} slab (inset).}
   \label{fig:membrane}
 \end{figure}
 
@@ -518,6 +521,12 @@ in \texttt{SPECIFICATION.md}; detailed methods and results are in the \texttt{do
   hydrogen mass repartitioning. \emph{J Chem Theory Comput} 2015;11:1864.
 \bibitem{grossfield2009} Grossfield A, Zuckerman DM. Quantifying uncertainty and sampling quality in
   biomolecular simulations. \emph{Annu Rep Comput Chem} 2009;5:23.
+\bibitem{ppm3} Lomize AL, Todd SC, Pogozheva ID. Spatial arrangement of proteins in planar and curved
+  membranes by PPM 3.0. \emph{Protein Sci} 2022;31:209.
+\bibitem{killian2000} Killian JA, von Heijne G. How proteins adapt to a membrane--water interface
+  (Trp/Tyr interfacial ``aromatic belt''). \emph{Trends Biochem Sci} 2000;25:429.
+\bibitem{kucerka2011} Ku\v{c}erka N, Nieh M-P, Katsaras J. Fluid phosphatidylcholine bilayer structural
+  parameters as a function of temperature and chain length. \emph{Biochim Biophys Acta} 2011;1808:2761.
 \end{thebibliography}
 
 \end{document}
