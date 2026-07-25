@@ -236,28 +236,6 @@ six-stage schedule with positional restraints on protein and lipid heavy atoms r
 across NVT then NPT stages, letting lipids pack around the receptor and water reorganize before the
 solute is freed; abrupt restraint release is a known source of membrane artifacts.
 
-\textbf{3.8 Production and quality control.} Production (OpenMM [26]) uses a
-LangevinMiddle integrator at 310\,K with a MonteCarloMembraneBarostat (semi-isotropic, zero surface
-tension) so the bilayer area relaxes naturally, and hydrogen-mass repartitioning to enable a
-\textbf{4\,fs} timestep [27], roughly doubling throughput with no measurable cost to the
-observables of interest. We run \textbf{$\ge$3 independent replicas} of several hundred nanoseconds each,
-because convergence is judged from the agreement of independent trajectories and block-averaged errors
-rather than a single RMSD plateau, which can flatten while the ensemble is still unconverged
-[28]. Reported metrics are backbone C$\alpha$ RMSD/RMSF (aligned before RMSF),
-\emph{receptor-aligned} ligand RMSD (so it reports pocket escape rather than global drift), key-contact
-occupancy (D3.32, ECL2 Glu231, H6.52, H7.36, Y7.43), and membrane observables (area-per-lipid
-$\approx$0.65--0.68\,nm$^2$ for POPC, bilayer thickness, deuterium order parameters) benchmarked against
-experiment to validate the bilayer. Crucially, the contact occupancies convert the static census of
-Figure~\ref{fig:heatmap} into equilibrium probabilities, directly testing whether the ECL2 Glu231 salt
-bridge that distinguishes ZH853 is persistent or transient.
-
-\textbf{3.9 Free-energy calculations.} Relative FEP across the ZH850/831/809 analogs (with ABFE and
-funnel metadynamics as exploratory) is released as a SLURM bundle. Given documented convergence
-difficulties for flexible macrocycles, these are framed as rank-ordering rather than quantitative
-affinities.
-
-\emph{All analyses are scripted and version-controlled (Data \& code availability).}
-
 \begin{figure}[htbp]
   \centering
   \begin{subfigure}[t]{0.30\textwidth}
@@ -282,6 +260,28 @@ affinities.
   (2$D_c$=28.8\,\Ang); ZH853 localizes to the extracellular leaflet, confirming the orientation.}
   \label{fig:membrane}
 \end{figure}
+
+\textbf{3.8 Production and quality control.} Production (OpenMM [26]) uses a
+LangevinMiddle integrator at 310\,K with a MonteCarloMembraneBarostat (semi-isotropic, zero surface
+tension) so the bilayer area relaxes naturally, and hydrogen-mass repartitioning to enable a
+\textbf{4\,fs} timestep [27], roughly doubling throughput with no measurable cost to the
+observables of interest. We run \textbf{$\ge$3 independent replicas} of several hundred nanoseconds each,
+because convergence is judged from the agreement of independent trajectories and block-averaged errors
+rather than a single RMSD plateau, which can flatten while the ensemble is still unconverged
+[28]. Reported metrics are backbone C$\alpha$ RMSD/RMSF (aligned before RMSF),
+\emph{receptor-aligned} ligand RMSD (so it reports pocket escape rather than global drift), key-contact
+occupancy (D3.32, ECL2 Glu231, H6.52, H7.36, Y7.43), and membrane observables (area-per-lipid
+$\approx$0.65--0.68\,nm$^2$ for POPC, bilayer thickness, deuterium order parameters) benchmarked against
+experiment to validate the bilayer. Crucially, the contact occupancies convert the static census of
+Figure~\ref{fig:heatmap} into equilibrium probabilities, directly testing whether the ECL2 Glu231 salt
+bridge that distinguishes ZH853 is persistent or transient.
+
+\textbf{3.9 Free-energy calculations.} Relative FEP across the ZH850/831/809 analogs (with ABFE and
+funnel metadynamics as exploratory) is released as a SLURM bundle. Given documented convergence
+difficulties for flexible macrocycles, these are framed as rank-ordering rather than quantitative
+affinities.
+
+\emph{All analyses are scripted and version-controlled (Data \& code availability).}
 
 \section{Results}
 
