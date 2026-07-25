@@ -23,6 +23,8 @@ cp ligand_resp/ZH853.mol2 ligand_resp/ZH853.frcmod . 2>/dev/null || \
 # --- pack the solvated bilayer around the oriented receptor ---
 # POPC:CHL 9:1, 0.15 M NaCl, >=15 A water pad, extra z for the Gi domain (SPECIFICATION D-4/D-10).
 # No --parametrize: packmol-memgen only builds/solvates the box; tleap.in does the FF assignment.
+# NB: do NOT add --verbose -- packmol-memgen 2025.1.29 crashes on it ("NameError: streamer");
+# for diagnostics inspect the generated packmol.inp / packmol-memgen.json instead.
 packmol-memgen \
   --pdb receptor.pdb \
   --lipids POPC:CHL1 --ratio 9:1 \
