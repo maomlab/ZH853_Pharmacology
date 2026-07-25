@@ -1,28 +1,27 @@
-# SLURM / simulation environment (Linux + CUDA GPU).
-# MD (OpenMM), force fields, free-energy, enhanced sampling. Built on the cluster.
-#   conda env create -f environment-cluster.yml   (or:  make env-cluster)
-# NOTE: pin exact versions once cluster CUDA/driver stack is known (see SPECIFICATION OQ-3).
+# GPU run environment (Linux + CUDA): equilibration, production, free energy.
+#   conda env create -f environment-cluster.yml     (or: bash src/02.10.00_slurm_bundle/00_install.sh)
+#
+# Python is intentionally UNPINNED so conda selects a version consistent with the latest
+# openmm; openmmforcefields>=0.16 pulls openmm>=8.5.1, which needs CUDA>=13 (your driver is
+# 13.2, so this matches). openmm-plumed is deliberately NOT here (see environment-plumed.yml):
+# it does not yet support openmm 8.5, and coupling it to openmmforcefields is unsatisfiable.
+# AmberTools is likewise split out to environment-prep.yml (it is a CPU build/prep tool).
 name: zh853mor-sim
 channels:
   - conda-forge
-  - openeye        # optional; only if an OpenEye license is available for charge assignment
 dependencies:
-  - python=3.11                 # openmmforcefields>=0.16.0 requires python>=3.11
-  - openmm
-  - openmmforcefields>=0.16.0   # >=0.16.0 required for multi-residue (peptide) ligands
+  - openmm                      # latest; conda picks a CUDA build matching your driver
+  - openmmforcefields>=0.16.0   # SMIRNOFF template gen for the peptide-ligand cross-check
   - openff-toolkit
   - openff-interchange
-  - ambertools                  # tleap/antechamber/parmchk2 for residue-library ligand params
   - parmed
   - mdanalysis
   - mdtraj
   - rdkit
   - numpy
   - scipy
-  # enhanced sampling / free energy
-  - plumed
-  - openmm-plumed
-  - alchemlyb
+  - alchemlyb                   # free-energy analysis (TI/BAR/MBAR)
   - pip
   - pip:
       - openfe                  # relative FEP + AbsoluteBindingProtocol (v1.7+)
+# Optional: to match the exact CUDA of your module, add e.g.  - cuda-version=13

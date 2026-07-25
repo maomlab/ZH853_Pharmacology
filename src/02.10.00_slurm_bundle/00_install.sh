@@ -1,17 +1,26 @@
 #!/bin/bash
-# Build the simulation conda env on the cluster. Run once on a login node.
+# Build the conda environments on the cluster. Run once on a login node.
+# Three task-specific envs (they have mutually incompatible openmm pins, so they must be split):
+#   zh853mor-prep    CPU  -- system building + ligand params (AmberTools)
+#   zh853mor-sim     GPU  -- equilibration, production, free energy
+#   zh853mor-plumed  GPU  -- metadynamics only (openmm-plumed; older openmm)  [optional]
 set -euo pipefail
 
 source "$(conda info --base)/etc/profile.d/conda.sh"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 
-# Uses the repo's pinned spec. TODO(OQ-3): confirm the CUDA build matches the cluster driver.
-conda env create -f ../../environment-cluster.yml || conda env update -f ../../environment-cluster.yml
+# Faster solves if available (classic conda is slow); harmless if already present.
+conda install -n base -y -c conda-forge mamba >/dev/null 2>&1 || true
+
+conda env create -f "$REPO/environment-prep.yml"    || conda env update -f "$REPO/environment-prep.yml"
+conda env create -f "$REPO/environment-cluster.yml"  || conda env update -f "$REPO/environment-cluster.yml"
+# Metadynamics only -- uncomment when you reach Methods 3.9:
+# conda env create -f "$REPO/environment-plumed.yml" || conda env update -f "$REPO/environment-plumed.yml"
+
+# Verify the GPU run env sees CUDA. NOTE: run this on a GPU node (srun --gres=gpu:1 ... --pty bash)
+# -- on a login node only CPU/Reference platforms appear.
 conda activate zh853mor-sim
-
-python - <<'PY'
-import openmm, openmm.version
-from openmm import Platform
-print("OpenMM", openmm.version.version)
-print("Platforms:", [Platform.getPlatform(i).getName() for i in range(Platform.getNumPlatforms())])
-PY
-echo "Env ready. If CUDA is absent above, load the cluster CUDA module and reinstall openmm."
+python -m openmm.testInstallation || true
+echo
+echo "If 'CUDA' is not listed above, you are probably on a login node -- re-run"
+echo "  python -m openmm.testInstallation   on a GPU node. cuDNN is NOT needed for OpenMM."

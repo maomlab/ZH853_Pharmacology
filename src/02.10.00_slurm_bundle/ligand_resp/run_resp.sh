@@ -2,7 +2,7 @@
 # ZH853 ligand parameterization. Route A (quick) is the default; Route B (RESP) for FEP.
 set -euo pipefail
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate zh853mor-sim
+conda activate zh853mor-prep   # antechamber/parmchk2/RESP live in the prep env
 
 SDF=../../../intermediate/02.04.00_ligand/ZH853_prepared.sdf   # +1, explicit H, bond orders
 

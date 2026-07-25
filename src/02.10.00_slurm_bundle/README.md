@@ -17,15 +17,31 @@ specs before submission.
   α5-helix retained) to hold the active state. For Objective 4 throughput.
 - Each built **twice**: D2.50 (Asp116) charged vs protonated (ASH).
 
+## Conda environments (three, task-specific)
+They are split because their `openmm` pins are mutually incompatible (`openmm-plumed` lags the
+newest `openmm` that `openmmforcefields` requires):
+| Env | Spec | Used by | Notes |
+|-----|------|---------|-------|
+| `zh853mor-prep` | `environment-prep.yml` | steps 1–2 | CPU; AmberTools/PACKMOL-Memgen |
+| `zh853mor-sim` | `environment-cluster.yml` | steps 3–5 + FEP | GPU; openmm + openmmforcefields |
+| `zh853mor-plumed` | `environment-plumed.yml` | metadynamics (3.9) | GPU; older openmm + openmm-plumed; optional |
+
 ## Workflow (run in order)
-| Step | Script | What | Where |
-|------|--------|------|-------|
-| 0 | `00_install.sh` | build the `zh853mor-sim` conda env | login node |
-| 1 | `ligand_resp/run_resp.sh` | GAFF2+AM1-BCC (quick) or RESP (rigorous) ligand params | GPU/CPU |
-| 2 | `01_build_system.sh` | PACKMOL-Memgen bilayer + tleap assembly → prmtop/rst7 | CPU |
-| 3 | `submit_equilibrate.sbatch` → `02_equilibrate.py` | 6-stage restrained equilibration | GPU |
-| 4 | `submit_production.sbatch` → `03_production.py` | production (≥3 replicas) | GPU |
-| 5 | `04_analyze.py` | QC: RMSD/RMSF, ligand RMSD, contact occupancy, membrane | CPU |
+| Step | Script | Env | Where |
+|------|--------|-----|-------|
+| 0 | `00_install.sh` | — | login node (builds the envs) |
+| 1 | `ligand_resp/run_resp.sh` | `zh853mor-prep` | CPU |
+| 2 | `01_build_system.sh` | `zh853mor-prep` | CPU |
+| 3 | `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU |
+| 4 | `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU |
+| 5 | `04_analyze.py` | `zh853mor-sim` | CPU |
+
+## CUDA / modules
+OpenMM (conda-forge) bundles its own CUDA runtime, so it needs only the node's NVIDIA **driver** —
+usually **no `module load cuda` required**. **cuDNN is never needed** for OpenMM MD (only for ML
+potentials). Verify on a GPU node with `python -m openmm.testInstallation`; if CUDA is missing, load a
+CUDA module ≤ the `nvidia-smi` "CUDA Version", and if the JIT compiler is not found,
+`export OPENMM_CUDA_COMPILER=$(which nvcc)`.
 
 ## Force field (SPECIFICATION D-12)
 ff19SB (protein) + Lipid21 (membrane) + OPC water + GAFF2/RESP ligand; 0.15 M NaCl. HMR → 4 fs.

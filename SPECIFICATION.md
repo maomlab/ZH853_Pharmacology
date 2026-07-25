@@ -46,6 +46,12 @@ This file records decisions, clarifications, and conventions made as the ZH853â€
 - **D-12 (force field):** **ff19SB + Lipid21 + OPC water + GAFF2/RESP ligand** (Amber route; matches the
   residue-library ligand plan D-3). CHARMM36m + CHARMM-GUI is the documented alternative. Water model is
   not mismatched to the protein FF. (2026-07-22)
+- **D-13 (three cluster conda envs):** The cluster stack is split into **`zh853mor-prep`** (AmberTools/
+  PACKMOL-Memgen, CPU), **`zh853mor-sim`** (openmm + openmmforcefields, GPU: equilibration/production/
+  FEP), and **`zh853mor-plumed`** (openmm 8.4 + openmm-plumed, GPU: metadynamics only). Reason:
+  `openmmforcefields>=0.16` needs openmm>=8.5.1 while `openmm-plumed` (latest) supports only openmm<=8.4,
+  so they are unsatisfiable together; splitting by task resolves it and keeps every capability. Python is
+  left unpinned so conda tracks the latest openmm (needs >=3.12). (2026-07-24)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which

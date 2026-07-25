@@ -1,0 +1,15 @@
+# CPU prep environment: membrane building + ligand parameterization.
+# Runs 01_build_system.sh (PACKMOL-Memgen + tleap) and ligand_resp/ (antechamber/RESP).
+# Kept separate from the GPU run env because AmberTools is a large CPU toolkit with its own
+# version constraints; no GPU/openmm needed here.
+#   conda env create -f environment-prep.yml
+name: zh853mor-prep
+channels:
+  - conda-forge
+dependencies:
+  - ambertools                  # tleap, antechamber, parmchk2, PACKMOL-Memgen
+  - parmed
+  - rdkit
+  - mdanalysis
+  - numpy
+  - openff-toolkit              # optional: OpenFF Interchange route for the ligand

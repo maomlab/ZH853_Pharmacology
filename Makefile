@@ -7,8 +7,12 @@ help:  ## Show this help
 env:  ## Create the local analysis conda env
 	conda env create -f environment.yml || conda env update -f environment.yml
 
-env-cluster:  ## Create the SLURM/simulation conda env
+env-cluster:  ## Create the cluster conda envs (prep + sim; run on the cluster)
+	conda env create -f environment-prep.yml    || conda env update -f environment-prep.yml
 	conda env create -f environment-cluster.yml || conda env update -f environment-cluster.yml
+
+env-plumed:  ## Create the metadynamics conda env (optional; openmm-plumed)
+	conda env create -f environment-plumed.yml || conda env update -f environment-plumed.yml
 
 lint:  ## Ruff lint (package + tests)
 	ruff check src/zh853mor tests

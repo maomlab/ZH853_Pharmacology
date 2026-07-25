@@ -3,7 +3,7 @@
 # Produces System A (receptor + ZH853 + Gi in POPC:chol 9:1). Run on a CPU node.
 set -euo pipefail
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate zh853mor-sim
+conda activate zh853mor-prep   # AmberTools / PACKMOL-Memgen live in the prep env
 
 REC=receptorR_fixed_heavy.pdb          # from intermediate/02.03.00_receptor/
 LIG_MOL2=ZH853.mol2                     # from ligand_resp/ (GAFF2/RESP charges)

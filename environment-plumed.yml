@@ -1,0 +1,14 @@
+# GPU metadynamics environment (exploratory; funnel / CTMD, Objective 4 / Methods 3.9).
+# Isolated because openmm-plumed does not yet support openmm 8.5, so it pins an older openmm
+# that is incompatible with openmmforcefields>=0.16 in the main run env. Only needed for the
+# metadynamics runs; equilibration/production/FEP use zh853mor-sim.
+#   conda env create -f environment-plumed.yml
+name: zh853mor-plumed
+channels:
+  - conda-forge
+dependencies:
+  - openmm=8.4.*                # newest openmm that openmm-plumed currently supports
+  - openmm-plumed
+  - plumed
+  - mdanalysis
+  - numpy
