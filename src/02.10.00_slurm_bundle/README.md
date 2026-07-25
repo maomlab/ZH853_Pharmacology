@@ -30,6 +30,7 @@ newest `openmm` that `openmmforcefields` requires):
 | Step | Script | Env | Where |
 |------|--------|-----|-------|
 | 0 | `00_install.sh` | — | login node (builds the envs) |
+| 0.5 | `check_gpu_env.sh` | `zh853mor-sim` | **GPU (pre-flight)** |
 | 1 | `ligand_resp/run_resp.sh` | `zh853mor-prep` | CPU |
 | 2 | `01_build_system.sh` | `zh853mor-prep` | CPU |
 | 3 | `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU |
@@ -39,8 +40,10 @@ newest `openmm` that `openmmforcefields` requires):
 ## CUDA / modules
 OpenMM (conda-forge) bundles its own CUDA runtime, so it needs only the node's NVIDIA **driver** —
 usually **no `module load cuda` required**. **cuDNN is never needed** for OpenMM MD (only for ML
-potentials). Verify on a GPU node with `python -m openmm.testInstallation`; if CUDA is missing, load a
-CUDA module ≤ the `nvidia-smi` "CUDA Version", and if the JIT compiler is not found,
+potentials). Before the first real run, submit the pre-flight **`sbatch check_gpu_env.sh`** (step 0.5):
+it prints the modules/`nvidia-smi`/env, runs `openmm.testInstallation`, and does a real 200-step CUDA
+run, ending in a clear **PASS/FAIL** with a fix checklist. If CUDA is missing, load a CUDA module
+≤ the `nvidia-smi` "CUDA Version"; if the JIT compiler is not found,
 `export OPENMM_CUDA_COMPILER=$(which nvcc)`.
 
 ## Force field (SPECIFICATION D-12)
