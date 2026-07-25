@@ -18,6 +18,7 @@ data/opm/*.pdb          # OPM-oriented reference, re-fetchable via prep-orient
 node_modules/
 src/03.10.00_molstar_render/pocket.mvsj
 src/03.10.00_molstar_render/membrane.mvsj
+src/03.10.00_molstar_render/membrane_calib.json
 src/03.10.00_molstar_render/overview_camera.json
 
 # Intermediate / large simulation artifacts (kept out of VCS; regenerate via Makefile)

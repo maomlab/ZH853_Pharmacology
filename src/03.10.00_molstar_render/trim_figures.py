@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -49,11 +50,14 @@ def trim(src: Path, dst: Path) -> None:
 
 
 def composite_membrane(src: Path, dst: Path, margin_frac: float = 0.03) -> None:
-    """Paint a bilayer band (cholesterol z-extent) behind the molecule, cropped TIGHT to the protein.
+    """Paint the OPM bilayer band behind the molecule, cropped TIGHT to the protein.
 
-    The crop is the molecule's bounding box (+ a small margin), NOT the band's -- so the band only
-    fills the tight crop and does not leave wide membrane-only strips on the sides.
+    The band is placed at the OPM hydrophobic boundaries (z = +/- opm_half): the cholesterols are
+    used as pixel fiducials (their known molecular z-range -> detected pixel rows gives a pixels/A
+    scale), so the drawn band is the OPM-inferred membrane, not the cholesterol extent. The crop is
+    the molecule's bounding box (+ margin), NOT the band's, so no wide membrane-only side strips.
     """
+    calib = json.loads((HERE / "membrane_calib.json").read_text())
     arr = np.asarray(_inset(Image.open(src).convert("RGB"))).copy()
     molecule = (arr < 246).any(axis=2)                                     # protein + cholesterol + ligand
     ys, xs = np.where(molecule)
@@ -66,16 +70,23 @@ def composite_membrane(src: Path, dst: Path, margin_frac: float = 0.03) -> None:
     x1, y1 = min(arr.shape[1] - 1, x1 + mx), min(arr.shape[0] - 1, y1 + my)
 
     r, g, b = arr[..., 0].astype(int), arr[..., 1].astype(int), arr[..., 2].astype(int)
-    orange = (r > 165) & (g > 65) & (g < 195) & (b < 100) & (r - b > 85)   # cholesterol -> band rows
+    orange = (r > 165) & (g > 65) & (g < 195) & (b < 100) & (r - b > 85)   # cholesterol fiducials
     rows = np.where(orange.any(axis=1))[0]
     if len(rows):
+        pr_top, pr_bot = int(rows.min()), int(rows.max())                 # high-z row, low-z row
+        cz_hi, cz_lo = calib["chol_z_max"], calib["chol_z_min"]
+        ppa = (pr_bot - pr_top) / (cz_hi - cz_lo)                          # pixels per Angstrom (>0)
+        oh = calib["opm_half"]
+        band_top = max(0, int(round(pr_top + (cz_hi - oh) * ppa)))        # z = +opm_half
+        band_bot = min(arr.shape[0] - 1, int(round(pr_top + (cz_hi + oh) * ppa)))  # z = -opm_half
         band = np.zeros(arr.shape[:2], bool)
-        band[int(rows.min()):int(rows.max()) + 1, :] = True
-        arr[band & ~molecule] = BAND_RGB                                  # band behind the molecule
+        band[band_top:band_bot + 1, :] = True
+        arr[band & ~molecule] = BAND_RGB                                  # OPM band behind the molecule
 
     out = arr[y0:y1 + 1, x0:x1 + 1]                                       # tight crop to the protein
     Image.fromarray(out).save(dst)
-    print(f"{dst.name}: membrane band + tight crop -> {out.shape[1]}x{out.shape[0]}")
+    print(f"{dst.name}: OPM membrane band (+/-{calib['opm_half']:.1f} A) + tight crop -> "
+          f"{out.shape[1]}x{out.shape[0]}")
 
 
 def main() -> int:
