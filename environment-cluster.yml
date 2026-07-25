@@ -7,7 +7,7 @@ channels:
   - conda-forge
   - openeye        # optional; only if an OpenEye license is available for charge assignment
 dependencies:
-  - python=3.10
+  - python=3.11                 # openmmforcefields>=0.16.0 requires python>=3.11
   - openmm
   - openmmforcefields>=0.16.0   # >=0.16.0 required for multi-residue (peptide) ligands
   - openff-toolkit
