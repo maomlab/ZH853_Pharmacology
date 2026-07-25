@@ -66,11 +66,7 @@ async function shoot(page, name) {
   }
 
   await browser.close();
-
-  // copy to manuscript figures
-  fs.copyFileSync(path.join(OUTDIR, '03.10.00_molstar_overview_20260723.png'),
-    path.join(FIGDIR, 'fig6_molstar_overview.png'));
-  fs.copyFileSync(pocket, path.join(FIGDIR, 'fig7_molstar_pocket.png'));
-  if (membrane) fs.copyFileSync(membrane, path.join(FIGDIR, 'fig_membrane_placement.png'));
+  // NOTE: manuscript figures are written by trim_figures.py (trim/composite), not here,
+  // so the staged figures are always the processed versions.
   console.log('done');
 })().catch(e => { console.error(e); process.exit(1); });

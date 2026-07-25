@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Trim white borders from the MolStar renders for tight manuscript panels.
+"""Post-process the MolStar renders into tight manuscript figures.
 
-Crops each render to the bounding box of non-white content plus a small uniform margin,
-and writes the trimmed image to product/manuscript/figures/.
+- overview / pocket: crop to the non-white content bounding box (drop the viewport frame first).
+- membrane: draw a solid bilayer band BEHIND the protein (spanning the cholesterol z-extent,
+  full width) then crop -- this shows the inferred membrane explicitly as a sanity check and
+  fills the lateral whitespace, while the molecule renders on top.
 """
 
 from __future__ import annotations
@@ -16,41 +18,58 @@ HERE = Path(__file__).resolve().parent
 PRODUCT = HERE.parents[1] / "product"
 FIGDIR = PRODUCT / "manuscript" / "figures"
 
-# (source render, destination manuscript figure)
-PAIRS = [
-    ("03.10.00_molstar_overview_20260723.png", "fig6_molstar_overview.png"),
-    ("03.10.00_molstar_pocket_20260723.png", "fig7_molstar_pocket.png"),
-    ("03.10.00_molstar_membrane_20260725.png", "fig_membrane_placement.png"),
-]
+WHITE_THRESH = 248
+INSET_FRAC = 0.03
+MARGIN_FRAC = 0.02
+BAND_RGB = (228, 210, 170)  # soft tan bilayer band
 
 
-def trim(src: Path, dst: Path, threshold: int = 248, margin_frac: float = 0.02,
-         inset_frac: float = 0.03) -> None:
-    img = Image.open(src).convert("RGB")
-    # drop the faint viewport border frame before content-trimming
-    inset = int(inset_frac * min(img.width, img.height))
-    img = img.crop((inset, inset, img.width - inset, img.height - inset))
-    arr = np.asarray(img)
-    # non-white = any channel below threshold
-    mask = (arr < threshold).any(axis=2)
+def _crop_to_content(arr: np.ndarray, margin_frac: float = MARGIN_FRAC) -> np.ndarray:
+    mask = (arr < WHITE_THRESH).any(axis=2)
     ys, xs = np.where(mask)
     if len(xs) == 0:
-        img.save(dst)
-        return
+        return arr
     x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
     m = int(margin_frac * max(x1 - x0, y1 - y0))
-    x0 = max(0, x0 - m)
-    y0 = max(0, y0 - m)
-    x1 = min(arr.shape[1] - 1, x1 + m)
-    y1 = min(arr.shape[0] - 1, y1 + m)
-    img.crop((x0, y0, x1 + 1, y1 + 1)).save(dst)
-    print(f"{dst.name}: {img.width}x{img.height} -> {x1 - x0 + 1}x{y1 - y0 + 1} "
-          f"(aspect {(x1 - x0 + 1) / (y1 - y0 + 1):.2f})")
+    x0, y0 = max(0, x0 - m), max(0, y0 - m)
+    x1, y1 = min(arr.shape[1] - 1, x1 + m), min(arr.shape[0] - 1, y1 + m)
+    return arr[y0:y1 + 1, x0:x1 + 1]
+
+
+def _inset(im: Image.Image) -> Image.Image:
+    d = int(INSET_FRAC * min(im.width, im.height))
+    return im.crop((d, d, im.width - d, im.height - d))
+
+
+def trim(src: Path, dst: Path) -> None:
+    arr = np.asarray(_inset(Image.open(src).convert("RGB")))
+    out = _crop_to_content(arr)
+    Image.fromarray(out).save(dst)
+    print(f"{dst.name}: trimmed -> {out.shape[1]}x{out.shape[0]}")
+
+
+def composite_membrane(src: Path, dst: Path) -> None:
+    """Paint a full-width bilayer band (cholesterol z-extent) behind the molecule, then crop."""
+    arr = np.asarray(_inset(Image.open(src).convert("RGB"))).copy()
+    r, g, b = arr[..., 0].astype(int), arr[..., 1].astype(int), arr[..., 2].astype(int)
+    orange = (r > 165) & (g > 65) & (g < 195) & (b < 100) & (r - b > 85)   # cholesterol
+    rows = np.where(orange.any(axis=1))[0]
+    if len(rows):
+        r0, r1 = int(rows.min()), int(rows.max())
+        molecule = (arr < 246).any(axis=2)
+        band = np.zeros(arr.shape[:2], bool)
+        band[r0:r1 + 1, :] = True
+        arr[band & ~molecule] = BAND_RGB          # band only where the molecule is not (behind it)
+    out = _crop_to_content(arr)
+    Image.fromarray(out).save(dst)
+    print(f"{dst.name}: membrane band + trim -> {out.shape[1]}x{out.shape[0]}")
 
 
 def main() -> int:
-    for s, d in PAIRS:
-        trim(PRODUCT / s, FIGDIR / d)
+    trim(PRODUCT / "03.10.00_molstar_overview_20260723.png", FIGDIR / "fig6_molstar_overview.png")
+    trim(PRODUCT / "03.10.00_molstar_pocket_20260723.png", FIGDIR / "fig7_molstar_pocket.png")
+    composite_membrane(PRODUCT / "03.10.00_molstar_membrane_20260725.png",
+                       FIGDIR / "fig_membrane_placement.png")
     return 0
 
 
