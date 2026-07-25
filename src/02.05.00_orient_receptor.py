@@ -45,24 +45,37 @@ def main() -> int:
     u = structure.load(IN_PDB)
     ca = u.select_atoms("name CA")
 
-    # membrane normal = TM-bundle principal axis
+    # membrane normal = TM-bundle principal axis (rebuilt receptor is in the deposited frame)
     x = ca.positions - ca.positions.mean(axis=0)
     normal = np.linalg.svd(x, full_matrices=False)[2][0]
     r = rotation_onto_z(normal)
 
-    # centre CA cloud at origin, then rotate the whole receptor so normal -> +z
-    all_atoms = u.atoms
-    all_atoms.positions = (all_atoms.positions - ca.center_of_geometry()) @ r.T
+    # membrane MIDPLANE from the 84 modeled cholesterols in the deposited structure (same frame),
+    # NOT the Cα centroid -- the receptor is asymmetric along z, so the Cα centroid is offset from
+    # the bilayer centre and mis-places packmol-memgen's head/tail planes.
+    orig = structure.load(paths.CRYOEM_PDB)
+    clr = orig.select_atoms("segid R and resname CLR")
+    if not len(clr):
+        print("ERROR: no cholesterol (CLR) in the deposited model to define the membrane centre.",
+              file=sys.stderr)
+        return 1
+
+    # Rotate normal -> z, then centre: xy on the receptor, z=0 on the cholesterol (membrane) midplane.
+    rot = u.atoms.positions @ r.T
+    ca_xy = (ca.positions @ r.T)[:, :2].mean(axis=0)
+    clr_z = float((clr.positions @ r.T)[:, 2].mean())
+    u.atoms.positions = rot - np.array([ca_xy[0], ca_xy[1], clr_z])
 
     out_dir = paths.ensure_dir(paths.INTERMEDIATE / "02.05.00_oriented")
     out = out_dir / "receptorR_oriented.pdb"
-    all_atoms.write(str(out))
+    u.atoms.write(str(out))
 
-    # report: TM span should now lie along z
-    zspan = float(np.ptp(u.select_atoms("name CA").positions[:, 2]))
-    print(f"Oriented normal -> +z; wrote {out}")
-    print(f"CA z-extent (membrane-spanning length) = {zspan:.1f} A")
-    print("NOTE: --preoriented is now valid for this file. For production, prefer PPM/OPM.")
+    caz = u.select_atoms("name CA").positions[:, 2]
+    clr_span = float(np.ptp((clr.positions @ r.T)[:, 2]))
+    print(f"Oriented normal -> +z; membrane midplane (cholesterol) at z=0; wrote {out}")
+    print(f"CA z-extent = {float(np.ptp(caz)):.1f} A; membrane extends {caz.min():.1f}..{caz.max():.1f} "
+          f"around z=0 (cholesterol z-span {clr_span:.1f} A)")
+    print("NOTE: --preoriented is now valid. For production, PPM/OPM is the rigorous alternative.")
     return 0
 
 
