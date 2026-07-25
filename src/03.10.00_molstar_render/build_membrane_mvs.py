@@ -31,7 +31,7 @@ def main() -> int:
     b = mvs.create_builder()
     struct = b.download(url=data_url).parse(format="pdb").model_structure()
 
-    # Receptor cartoon; the 84 modeled cholesterols (orange) mark the bilayer directly -- the explicit
+    # Receptor cartoon; the 3 modeled cholesterols (84 atoms; orange) mark the bilayer directly -- explicit
     # slab/midplane is quantified in the companion determination plot (src/02.06.00). A MolStar box
     # primitive was tried for the slab but does not render legibly at usable transparency.
     (struct.component(selector="polymer").representation(type="cartoon")

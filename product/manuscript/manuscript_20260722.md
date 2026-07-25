@@ -76,7 +76,7 @@ distinct and are treated separately here.
 
 **3.1 Structure and numbering.** We used the deposited real-space-refined MOR–Gi–scFv16–ZH853 model
 (3.5 Å; CC_mask 0.80; 0.0% Ramachandran outliers). Chains: Gαi (A), Gβ1 (B), Gγ2 (C), scFv16 (D),
-MOR/*OPRM1* residues 69–349 with 84 modeled cholesterols (R), and ZH853 as HETATM ligand L01 (E). The
+MOR/*OPRM1* residues 69–349 with 3 modeled cholesterols (84 atoms) (R), and ZH853 as HETATM ligand L01 (E). The
 construct uses **human OPRM1 (UniProt P35372) numbering**, verified against all canonical orthosteric
 positions; mouse-numbered comparators were offset by +2 to this frame. The ligand's 59 heavy atoms and
 formula (C₄₂H₅₁N₉O₈, 810 Da) match the reference SMILES, confirming the monomeric macrocycle.

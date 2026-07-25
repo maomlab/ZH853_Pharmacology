@@ -52,7 +52,7 @@ ZH853 is a **macrocyclic, D-amino-acid endomorphin-1 analog** from the Zadina la
 | B | Gβ1 | 5–340 |
 | C | Gγ2 | 10–63 |
 | D | scFv16 | 1–248 |
-| R | **MOR (OPRM1)** + 84 cholesterol (CLR) atoms | **69–349, no internal gaps** |
+| R | **MOR (OPRM1)** + 3 cholesterols (CLR; 84 atoms) | **69–349, no internal gaps** |
 | E | **ZH853** (ligand `L01`) | 1 macrocyclic residue, 59 heavy atoms |
 
 - **Numbering is human OPRM1 (UniProt P35372).** Verified: every canonical orthosteric position

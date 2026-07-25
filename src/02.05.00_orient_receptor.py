@@ -50,7 +50,7 @@ def main() -> int:
     normal = np.linalg.svd(x, full_matrices=False)[2][0]
     r = rotation_onto_z(normal)
 
-    # membrane MIDPLANE from the 84 modeled cholesterols in the deposited structure (same frame),
+    # membrane MIDPLANE from the 3 modeled cholesterols (84 atoms) in the deposited structure (same frame),
     # NOT the Cα centroid -- the receptor is asymmetric along z, so the Cα centroid is offset from
     # the bilayer centre and mis-places packmol-memgen's head/tail planes.
     orig = structure.load(paths.CRYOEM_PDB)

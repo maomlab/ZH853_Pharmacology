@@ -13,7 +13,7 @@ Chain inventory, missing atoms, termini, His sites, disulfides, and the membrane
 - MOR chain R spans 69–349 with **no internal gaps** (only sidechain truncations to rebuild).
 - **45 incomplete residues** (truncated sidechains, mostly surface Lys/Glu/Arg — expected at 3.5 Å).
 - Conserved disulfide **C142–C219** present (enforce explicitly).
-- Membrane normal from the TM-bundle principal axis; **84 modeled cholesterols** span ~28 Å along it
+- Membrane normal from the TM-bundle principal axis; **3 modeled cholesterols** (84 atoms) span ~28 Å along it
   (bilayer-thickness cue); receptor spans ~69 Å along the normal. Use to pre-orient (PPM/OPM).
 
 ## 2. Protonation (`02.02.00`, PROPKA @ pH 7.4)

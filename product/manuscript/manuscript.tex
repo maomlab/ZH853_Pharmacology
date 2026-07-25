@@ -134,7 +134,7 @@ distinct and are treated separately here.
 
 \textbf{3.1 Structure and numbering.} We used the deposited real-space-refined MOR--Gi--scFv16--ZH853
 model (3.5\,\Ang; CC$_{\text{mask}}$ 0.80; 0.0\% Ramachandran outliers). Chains: G\al i (A), G\bt 1
-(B), G\gm 2 (C), scFv16 (D), MOR/\emph{OPRM1} residues 69--349 with 84 modeled cholesterols (R), and
+(B), G\gm 2 (C), scFv16 (D), MOR/\emph{OPRM1} residues 69--349 with 3 modeled cholesterols (R), and
 ZH853 as HETATM ligand L01 (E). The construct uses \textbf{human OPRM1 (UniProt P35372) numbering},
 verified against all canonical orthosteric positions; mouse-numbered comparators were offset by $+2$
 to this frame. The ligand's 59 heavy atoms and formula (C$_{42}$H$_{51}$N$_9$O$_8$, 810\,Da) match the
@@ -208,8 +208,9 @@ validated against NMR.
 
 \textbf{3.7 Membrane placement and force field.} We fix the bilayer position directly from the cryo-EM
 map rather than predicting it. The receptor's transmembrane principal axis (the long axis of the
-C$\alpha$ cloud) is rotated onto $z$; the \textbf{84 cholesterols modeled in the density} at the lipid-facing
-surface then set the bilayer geometry --- their mean $z$ defines the hydrophobic midplane ($z=0$) and
+C$\alpha$ cloud) is rotated onto $z$; the \textbf{3 cholesterols modeled in the density} (84 atoms) at the
+lipid-facing surface then set the bilayer geometry --- their mean $z$ defines the hydrophobic midplane
+($z=0$) and
 their $\sim$28\,\Ang{} span sets the hydrophobic thickness, so the receptor is translated to seat the
 membrane midplane at the cholesterol centre and the transmembrane helices straddle the slab
 (Figure~\ref{fig:membrane}). Centring on the cholesterols rather than the C$\alpha$ centroid is essential:
@@ -270,7 +271,7 @@ affinities.
     \caption{}\label{fig:membrane-b}
   \end{subfigure}
   \caption{\textbf{Cryo-EM-anchored membrane placement.} \textbf{(A)} Side view (Mol* render) of the
-  oriented \uOR{} (grey cartoon) with the 84 modeled cholesterols (orange, ball-and-stick) and ZH853
+  oriented \uOR{} (grey cartoon) with the 3 modeled cholesterols (84 atoms; orange, ball-and-stick) and ZH853
   (green). The \textbf{tan band is the inferred bilayer} --- the cholesterol-defined midplane and
   hydrophobic thickness (\S3.7) --- drawn behind the receptor as a placement sanity check: the
   transmembrane helices span it and the cholesterols sit within it, while the intracellular loops fall
