@@ -1,5 +1,15 @@
-# tleap assembly for the MOR-ZH853 membrane system.
+# tleap assembly for the MOR-ZH853 membrane system.  ***TEMPLATE -- do not run directly.***
 # ff19SB protein + Lipid21 membrane + OPC water + GAFF2/RESP ligand (SPECIFICATION D-12).
+#
+# make_tleap.py reads the packed system and substitutes @PLACEHOLDERS@ to produce tleap_run.in,
+# which is what 01_build_system.sh actually feeds to tleap. Two things cannot be hardcoded here:
+#   @DISULFIDES@ -- loadpdb renumbers every residue sequentially from 1 across the WHOLE system
+#                   (protein, then lipids, then water), so the OPRM1 numbering is gone by the time
+#                   `bond` runs. C142/C219 happen to be 74/151 for the current 69-349 construct,
+#                   but that shifts with ACE/NME caps or any change of construct boundaries.
+#   @SETBOX@     -- the box must be the periodic cell PACKMOL packed into. `setBox sys vdw` derives
+#                   a box from van der Waals extents instead, which does not reproduce the packing
+#                   cell and leaves the system wrong at the periodic boundary.
 source leaprc.protein.ff19SB
 source leaprc.lipid21
 source leaprc.water.opc
@@ -9,16 +19,17 @@ source leaprc.gaff2
 LIG = loadmol2 ZH853.mol2
 loadamberparams ZH853.frcmod
 
-# assembled, pre-packed, pre-solvated system from PACKMOL-Memgen
-sys = loadpdb bilayer_system.pdb
+# assembled, pre-packed, pre-solvated system from PACKMOL-Memgen, with disulfide cysteines
+# renamed CYS -> CYX by make_tleap.py so ff19SB does not add an HG to a bonded sulfur.
+sys = loadpdb @SYSTEM_PDB@
 
-# conserved disulfide (human OPRM1 C142-C219)
-bond sys.142.SG sys.219.SG
+# conserved disulfide (human OPRM1 C142-C219), in tleap's sequential numbering
+@DISULFIDES@
 
 # NOTE: cap truncated receptor termini (T69/F349) with ACE/NME before this step,
 # and set HIS tautomers + D2.50 (ASH116 for the protonated variant) in the input PDB.
 
-setBox sys vdw
+@SETBOX@
 check sys
 saveamberparm sys system.prmtop system.rst7
 quit
