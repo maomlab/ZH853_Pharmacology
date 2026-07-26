@@ -190,10 +190,33 @@ assigned by PROPKA at pH 7.4 [15]; the sole non-standard prediction is \textbf{D
 (Asp116), pKa 7.61} --- essentially 1:1 protonated at physiological pH --- motivating the parallel-system
 design and constant-pH MD as the rigorous fallback. All four chain-R histidines are neutral; their
 HID/HIE tautomers are set from the local hydrogen-bond network because H6.52 and H7.36 line the pocket
-and a mis-assigned tautomer would perturb the interactions under study. The conserved ECL2--TM3
-disulfide (Cys142--Cys219) is enforced explicitly, and the truncated receptor termini are capped with
-neutral acetyl/\emph{N}-methylamide groups rather than charged termini, which would be artifacts on an
-internal transmembrane fragment. ZH853 is a macrocyclic peptide with D-amino acids and a
+and a mis-assigned tautomer would perturb the interactions under study. The truncated receptor termini
+are capped with neutral acetyl/\emph{N}-methylamide groups rather than charged termini, which would be
+artifacts on an internal transmembrane fragment.
+
+The construct contains twelve cysteines but only one disulfide: the class-A-conserved
+\textbf{Cys142--Cys219} bond, from TM3 position 3.25 to ECL2, which tethers the loop across the mouth
+of the orthosteric pocket. The assignment is unambiguous on geometry alone --- these two S$\gamma$
+atoms are 2.02\,\Ang{} apart, whereas the next-closest S$\gamma$ pair in the model is 8.07\,\Ang{}
+away, so the remaining ten cysteines are
+left reduced. This particular bond is load-bearing for the present work rather than incidental --- the
+interaction that distinguishes ZH853 from every other agonist in the comparator set is a salt bridge to
+Glu231, which lies \emph{in ECL2}, and an unrestrained loop that lifts off the pocket would make exactly
+the contact we set out to quantify unmeasurable. We therefore do not infer the bond from deposited
+connectivity records or residue names. At assembly the pair is detected geometrically
+(S$\gamma$--S$\gamma$ \lteq2.5\,\Ang), both residues are renamed CYS\ra CYX so that ff19SB does not
+build a thiol hydrogen onto a sulfur that is about to take a second bond, and the linkage is declared
+to \texttt{tleap} [32] explicitly rather than left to distance-based auto-detection. One implementation
+detail is recorded here because it is a \emph{silent} failure mode rather than a diagnosable one:
+\texttt{loadpdb} renumbers every residue sequentially from 1 across the \emph{entire} assembled system
+--- receptor first, then lipids, water and ions --- so the human OPRM1 numbering used throughout this
+paper has ceased to exist by the time the bond is declared, Cys142 and Cys219 becoming residues 74 and
+151 for the 69--349 construct. A hardcoded index pair would bond two arbitrary residues, plausibly a
+lipid to a water, and neither \texttt{tleap} nor the subsequent energy minimization would necessarily
+flag it. The indices are instead derived from the packed coordinates at build time, which also keeps
+them correct under terminal capping or any change of construct boundaries.
+
+ZH853 is a macrocyclic peptide with D-amino acids and a
 side-chain-to-side-chain lactam --- outside the validated coverage of both general small-molecule force
 fields (not optimized for peptides) and protein force fields (which lack the non-canonical linkage). We
 therefore parameterize it by an Amber residue-library route: capped-dipeptide fragments per residue,
@@ -526,6 +549,7 @@ in \texttt{SPECIFICATION.md}; detailed methods and results are in the \texttt{do
   (Trp/Tyr interfacial ``aromatic belt''). \emph{Trends Biochem Sci} 2000;25:429.
 \bibitem{kucerka2011} Ku\v{c}erka N, Nieh M-P, Katsaras J. Fluid phosphatidylcholine bilayer structural
   parameters as a function of temperature and chain length. \emph{Biochim Biophys Acta} 2011;1808:2761.
+\bibitem{ambertools} Case DA, et al. AmberTools. \emph{J Chem Inf Model} 2023;63:6183.
 \end{thebibliography}
 
 \end{document}
