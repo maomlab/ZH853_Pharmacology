@@ -21,17 +21,29 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 #   "unable to put the molecules in the desired regions even without considering distance
 #    tolerances" / "Maximum violation of the restraints: ~26" (= one lipid length, 100% of copies),
 # and no change of packmol-memgen flags will fix it. So: always start empty.
-BUILD="${BUILD_DIR:-$HERE/build_$(date +%Y%m%d_%H%M%S)}"
+# Generated artefacts live under intermediate/, never in src/ (SPECIFICATION D-16).
+D250="${D250:-ASP}"   # ASP = charged D2.50 (default); ASH = protonated variant (D-11)
+case "$D250" in ASP|ASH) ;; *) echo "ERROR: D250 must be ASP or ASH, got '$D250'."; exit 1 ;; esac
+BUILD="${BUILD_DIR:-$REPO/intermediate/02.10.00_build/${D250}_$(date +%Y%m%d_%H%M%S)}"
 mkdir -p "$BUILD"
 [ -z "$(ls -A "$BUILD")" ] || { echo "ERROR: build dir $BUILD is not empty."; exit 1; }
-echo "Building in $BUILD"
+echo "Building in $BUILD (D2.50 = $D250)"
 
 # --- stage inputs -------------------------------------------------------------------------
 # Receptor: use the membrane-ORIENTED file (normal along z) so --preoriented is valid.
-# Produced by `make prep-orient` (src/02.05.00_orient_receptor.py). PPM/OPM is preferred for
-# production; swap in the PPM-oriented PDB here if you have it.
-cp "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" "$BUILD/receptor.pdb"
-cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/check_placement.py" "$BUILD/"
+# Produced by `make prep-orient` (src/02.05.00_orient_receptor.py); already carries the ACE/NME
+# caps and the named His tautomers from 02.03.00, so no downstream default can override them.
+# The D2.50 variant is a pure residue rename -- same geometry, so it is applied here rather than
+# by duplicating the whole prep/orient chain (D-11).
+if [ "$D250" = "ASH" ]; then
+  awk '{ if ((substr($0,1,4)=="ATOM") && substr($0,18,3)=="ASP" && (substr($0,23,4)+0)==116)
+           print substr($0,1,17) "ASH" substr($0,21); else print }' \
+    "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" > "$BUILD/receptor.pdb"
+  grep -qc " ASH R 116" "$BUILD/receptor.pdb" || { echo "ERROR: ASP116->ASH rename found no atoms."; exit 1; }
+else
+  cp "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" "$BUILD/receptor.pdb"
+fi
+cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/check_placement.py" "$HERE/check_piercing.py" "$BUILD/"
 # Ligand parameters come from ligand_resp/run_resp.sh (run that first):
 cp "$HERE"/ligand_resp/ZH853.mol2 "$HERE"/ligand_resp/ZH853.frcmod "$BUILD/" 2>/dev/null || \
   echo "WARNING: ZH853.mol2/.frcmod not found -- run ligand_resp/run_resp.sh first."
@@ -74,6 +86,13 @@ mv -f bilayer_receptor.pdb bilayer_system.pdb
 if [ "${SKIP_PLACEMENT_CHECK:-0}" != "1" ]; then
   python check_placement.py bilayer_system.pdb receptor.pdb
 fi
+
+# --- lipid ring piercing --------------------------------------------------------------------
+# packmol-memgen's own piercing finder is unreliable ("Lipid piercing finder failed" on this
+# system). A tail threaded through an aromatic or sterol ring is topologically trapped: it cannot
+# escape during minimisation or MD, so it silently corrupts the whole trajectory. Report only --
+# a piercing needs a human decision (re-pack with a different seed vs edit the offender).
+python check_piercing.py bilayer_system.pdb || true
 
 # --- assemble with tleap (ff19SB + Lipid21 + OPC + GAFF2/RESP ligand) ------------------------
 # make_tleap.py fills in the disulfide bond (loadpdb renumbers residues sequentially, so the

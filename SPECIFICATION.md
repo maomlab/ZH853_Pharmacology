@@ -9,6 +9,9 @@ This file records decisions, clarifications, and conventions made as the ZH853�
 - **Ballesteros-Weinstein** generic numbers used alongside construct numbers throughout.
 - **Directory/versioning:** raw inputs → `data/`; code → `src/##.##.##_name`; caches →
   `intermediate/`; outputs → `product/…_YYYYMMDD.ext`; plan/decisions → `docs/`.
+- **`src/` holds only workflows; everything generated goes to `intermediate/`** (D-16). Scripts run
+  from `src/` must never write beside themselves — a build directory under `src/` is both untracked
+  clutter and, for PACKMOL-Memgen, an active hazard (it reuses component PDBs it finds in its CWD).
 
 ## Decisions (resolved)
 - **D-1 (numbering):** Use human OPRM1 P35372 numbering as the project standard; verified against the
@@ -59,6 +62,26 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   span ≈ the POPC hydrocarbon core 2Dc=28.8 Å [Kučerka 2011] and is thin). Placement is cross-checked in
   `02.06.00` against the **Trp/Tyr aromatic girdle** (~30 Å, agrees with OPM) and experiment. Reason: bound
   cholesterols are a weak, biased ruler; OPM/PPM + the aromatic belt are the recognized methods. (2026-07-25)
+
+- **D-15 (receptor finalisation happens in prep, not assembly):** His tautomers and neutral ACE/NME
+  termini are written into the receptor by `02.03.00`, not left to the membrane-builder/tleap step.
+  Reason: both were silently overridden by downstream defaults in the first build. tleap maps a residue
+  named `HIS` to **HIE** regardless of the tautomer determined upstream — the 2026-07-26 build got HIE
+  at all four sites although OpenMM's H-bond-network assignment (the standard method, run inside
+  PDBFixer) had chosen **HID for H225, H299/H6.52 and H321/H7.36**, i.e. three wrong, including both
+  pocket histidines. Likewise a chain starting/ending on a standard residue is built with charged
+  termini (`NTHR`/`CPHE`), adding two formal charges that full-length OPRM1 (69–349 of 400 aa) does not
+  have. Neither raises an error, so both are now fixed in the receptor and verifiable in
+  `product/02.03.00_receptor_prep_*.md`. Cap torsions are chosen by a clash scan (closest cap–protein
+  contact 4.3 Å). (2026-07-26)
+- **D-16 (generated artefacts live under `intermediate/`):** `src/` contains workflows only; build
+  directories, packing intermediates and staged inputs go to `intermediate/##.##.##_name/`. See
+  Conventions. (2026-07-26)
+- **D-17 (D2.50 variant is a build-time rename):** The ASH116 system is produced by
+  `D250=ASH ./01_build_system.sh`, which renames the residue in the staged receptor, rather than by
+  duplicating the prep/orient chain. The two variants differ only in protonation, so sharing one
+  prepared and OPM-oriented receptor guarantees the comparison is not confounded by a differing
+  starting geometry (D-11). (2026-07-26)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which

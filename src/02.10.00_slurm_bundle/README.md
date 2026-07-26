@@ -48,11 +48,22 @@ newest `openmm` that `openmmforcefields` requires):
 | 1 | `ligand_resp/run_resp.sh` | `zh853mor-prep` | CPU |
 | 2 | `01_build_system.sh` | `zh853mor-prep` | CPU |
 | 2a | `check_placement.py` | `zh853mor-prep` | CPU (called by step 2) |
-| 2b | `make_tleap.py` | `zh853mor-prep` | CPU (called by step 2) |
+| 2b | `check_piercing.py` | `zh853mor-prep` | CPU (called by step 2) |
+| 2c | `make_tleap.py` | `zh853mor-prep` | CPU (called by step 2) |
 
 ### Building the system (step 2)
 
-`01_build_system.sh` creates a **fresh timestamped `build_*/` directory** and works there. This is
+```bash
+./01_build_system.sh              # D2.50 charged (default)
+D250=ASH ./01_build_system.sh     # D2.50 protonated variant (D-11/D-17)
+```
+
+Both systems come from the **same** prepared and OPM-oriented receptor — the variant is a residue
+rename applied to the staged copy, so the comparison cannot be confounded by a different starting
+geometry. Output goes to `intermediate/02.10.00_build/<D250>_<timestamp>/`, never inside `src/`
+(D-16).
+
+`01_build_system.sh` creates a **fresh timestamped build directory** and works there. This is
 not cosmetic: PACKMOL-Memgen writes to the CWD *and silently reuses anything it finds there* — the
 component PDBs (`POPC.pdb`, `CHL1.pdb`, `WAT.pdb`, `Na+.pdb`, `Cl-.pdb`; watch for its "Using
 WAT.pdb in the folder" message) and the preprocessed protein files (`receptor_Trim_H.pdb`,
@@ -85,6 +96,16 @@ Two post-build steps then run automatically:
   comparison with the OPM ±15.7 Å slab (built: −16.5/+13.7 Å, P–P thickness 38.6 Å, matching the
   37–40 Å predicted in Methods §3.7). Override with `SKIP_PLACEMENT_CHECK=1` only to inspect a
   known-bad build.
+- **`check_piercing.py`** — finds lipid tails threaded through rings. PACKMOL enforces a minimum
+  pairwise distance, which does not stop a tail passing *through* a Phe/Tyr/Trp/His/Pro ring or one of
+  cholesterol's fused rings: every atom can be >2 Å from every other while the tail is threaded. This
+  is what packmol-memgen's own finder tries to catch and could not here ("Lipid piercing finder
+  failed"). It matters more than a clash because it is topological — minimisation separates atoms
+  along straight lines and no such path unthreads a ring, so the lipid stays trapped for the whole
+  trajectory. Rings are found as 5-/6-cycles in each residue's distance-inferred bond graph (so
+  cholesterol and the ligand need no hardcoded atom names) and every bond from another residue is
+  tested for segment/disc intersection. Reports without failing the build: the fix (re-pack with a
+  different seed) is a human decision.
 - **`make_tleap.py`** — fills the two `@PLACEHOLDERS@` in `tleap.in` that cannot be known until the
   system is packed, writing `tleap_run.in` plus a `bilayer_system_ff.pdb`:
   - the **disulfide**, because `loadpdb` renumbers every residue sequentially from 1 across the whole
@@ -92,9 +113,13 @@ Two post-build steps then run automatically:
     found geometrically (SG–SG 2.02 Å) and emitted in tleap's numbering — 74/151 for the current
     69–349 construct, but that shifts with ACE/NME caps, so it is never hardcoded. The two cysteines
     are renamed `CYS`→`CYX` so ff19SB does not build an HG onto a bonded sulfur.
-  - the **periodic box**, from PACKMOL's own cell (CRYST1, else the `inside box` bounds in
-    `packmol.inp`) — 91.38 × 91.38 × 108.22 Å for the current setup. The previous `setBox sys vdw`
-    derived a box from van der Waals extents, which does not reproduce the packing cell.
+  - the **periodic box**. Candidate cells are collected from CRYST1, `packmol-memgen.json` and the
+    `inside box` bounds in `packmol.inp`, and each is checked against the packed coordinates — the
+    first that actually contains them wins. This check exists because the 2026-07-26 build produced a
+    system spanning 87.0 × 87.5 × 113.2 Å inside a nominal 81.40 × 81.40 × 111.72 Å cell: a cell
+    smaller than its own contents wraps atoms onto their periodic images, and no amount of
+    minimisation repairs that. The original `setBox sys vdw` was worse still — it derives a box from
+    van der Waals extents and does not reproduce the packing cell at all.
 | 3 | `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU |
 | 4 | `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU |
 | 5 | `04_analyze.py` | `zh853mor-sim` | CPU |

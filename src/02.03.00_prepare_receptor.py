@@ -38,14 +38,30 @@ def main() -> int:
     n_rebuilt = sum(len(v) for v in fixer.missingAtoms.values())
     fixer.addMissingAtoms()  # rebuild truncated sidechains
 
-    # heavy-atom structure for the membrane builder (CHARMM-GUI adds its own H)
-    heavy_out = work / "receptorR_fixed_heavy.pdb"
-    PDBFile.writeFile(fixer.topology, fixer.positions, str(heavy_out), keepIds=True)
+    # raw heavy-atom structure (pre-finalisation; kept for provenance)
+    raw_heavy = work / "receptorR_fixed_heavy_raw.pdb"
+    PDBFile.writeFile(fixer.topology, fixer.positions, str(raw_heavy), keepIds=True)
 
-    # protonated copy at pH 7.4 for inspection / local sanity
+    # protonated copy at pH 7.4 -- also the source of the His tautomer assignment below
     fixer.addMissingHydrogens(7.4)
     prot_out = work / "receptorR_fixed_pH7.4.pdb"
     PDBFile.writeFile(fixer.topology, fixer.positions, str(prot_out), keepIds=True)
+
+    # --- finalise the receptor so no downstream default can override these decisions ----------
+    # 1. His tautomers: OpenMM already chose HID/HIE/HIP from the local H-bond network when it
+    #    added hydrogens, but it does not rename the residue -- and tleap maps a residue still
+    #    named HIS to HIE, silently. Recover the choice and write it into the residue name.
+    taut = prep.his_tautomers(prot_out)
+    named = work / "receptorR_fixed_heavy_his.pdb"
+    with open(raw_heavy) as fh, open(named, "w") as out:
+        for line in fh:
+            if line.startswith(("ATOM", "HETATM")) and line[17:20].strip() == "HIS":
+                line = line[:17] + f"{taut.get(int(line[22:26]), 'HIS'):>3s}" + line[20:]
+            out.write(line)
+
+    # 2. Neutral ACE/NME caps on the truncated termini (D-15).
+    heavy_out = work / "receptorR_fixed_heavy.pdb"
+    caps = prep.cap_termini(named, heavy_out)
 
     # verify the rebuild closed the incomplete-sidechain gaps
     after = structure.load(prot_out)
@@ -58,15 +74,36 @@ def main() -> int:
              "(expected ~0; any residual are chain-terminal).",
              f"- Disulfides preserved: {', '.join(f'C{i}-C{j}' for i,j,_ in structure.disulfides(u))}.",
              "",
-             "## Outputs (intermediate/02.03.00_receptor/)",
-             f"- `{heavy_out.name}` — heavy-atom receptor for the membrane builder (CHARMM-GUI/PACKMOL).",
-             f"- `{prot_out.name}` — pH-7.4 protonated copy for inspection.",
+             "## His tautomers (assigned here, not left to a downstream default)",
+             "OpenMM/PDBFixer picks HID/HIE/HIP from the local hydrogen-bond network while adding",
+             "hydrogens, but leaves the residue named `HIS` — and tleap maps `HIS` to **HIE**",
+             "regardless. The choice is therefore written into the residue name here.",
              "",
-             "## Remaining prep (in the membrane-builder / tleap step)",
-             "- **Cap truncated termini** T69 (N-term) and F349 (C-term) with ACE/NME (neutral) "
-             "rather than charged termini — they are internal fragments of full-length OPRM1.",
-             "- Apply the **D2.50 (Asp116) protonated variant** for the parallel system (D-11).",
-             "- Assign **His tautomers** per `02.02.00_protonation` (H299/H321 near the pocket).",
+             "| Residue | BW | assigned |",
+             "|---|---|---|",
+             *[f"| HIS{r} | {({299: 'H6.52', 321: 'H7.36'}).get(r, '—')} | **{t}** |"
+               for r, t in sorted(taut.items())],
+             "",
+             "H299 (H6.52) and H321 (H7.36) line the orthosteric pocket, so verify these two against",
+             "the ZH853 contact map before production (`02.02.00_protonation`).",
+             "",
+             "## Terminal caps",
+             f"- ACE {caps['ace_resid']} / NME {caps['nme_resid']} added; C-terminal OXT dropped.",
+             f"- Backbone torsions chosen by clash scan: phi {caps['phi']:.0f}°, psi {caps['psi']:.0f}°; "
+             f"closest cap-to-protein contact **{caps['min_contact']} Å**.",
+             "- Rationale: 69–349 is an internal fragment of full-length OPRM1 (400 aa), so charged "
+             "termini would add two formal charges the real receptor does not have (D-15).",
+             "",
+             "## Outputs (intermediate/02.03.00_receptor/)",
+             f"- `{heavy_out.name}` — **finalised** heavy-atom receptor (tautomers named, termini "
+             "capped) for orientation (02.05.00) and the membrane builder.",
+             f"- `{raw_heavy.name}` — pre-finalisation copy, for provenance.",
+             f"- `{prot_out.name}` — pH-7.4 protonated copy; source of the tautomer assignment.",
+             "",
+             "## Remaining prep (in the build step)",
+             "- The **D2.50 (Asp116) protonated variant** is a build-time residue rename "
+             "(`D250=ASH ./01_build_system.sh`), not a separate prep run — the geometry is identical "
+             "(D-11).",
              "- Cholesterol from the cryo-EM model is dropped here; the membrane builder places lipids "
              "(POPC:chol 9:1 baseline, D-4).",
              ]

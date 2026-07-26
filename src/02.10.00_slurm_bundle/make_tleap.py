@@ -9,16 +9,21 @@ Two values in the tleap input can only be known after PACKMOL-Memgen has run:
               cysteines are also renamed CYS -> CYX, without which ff19SB builds an HG onto a
               sulfur that is about to get a second bond.
 
-  box         the periodic cell must be the one PACKMOL packed into. Taken from the CRYST1 record
-              written by packmol-memgen, else reconstructed from the `inside box` constraints in
-              packmol.inp.
+  box         the periodic cell must be the one PACKMOL packed into. Candidates are collected
+              from the CRYST1 record, packmol-memgen.json, and the `inside box` constraints in
+              packmol.inp, then each is checked against the packed coordinates -- the first that
+              actually contains them wins. A cell smaller than its own contents makes atoms wrap
+              onto their periodic images, which no amount of minimisation repairs.
 
 Run (in the build directory, after packmol-memgen): python make_tleap.py
 """
 
 from __future__ import annotations
 
+import contextlib
+import json
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -70,12 +75,36 @@ def rename_cyx(lines, residues, bonded: set[int]) -> list[str]:
     return out
 
 
-def box_dims(lines, packmol_inp: Path):
+def box_candidates(lines, packmol_inp: Path, json_path: Path) -> list[tuple[str, tuple]]:
+    """Every periodic cell we can derive, best source first.
+
+    These disagree, and the difference matters: a box smaller than the coordinates means atoms
+    wrap on top of their own periodic images, which minimisation cannot fix.
+    """
+    out = []
     for line in lines:
         if line.startswith("CRYST1"):
             dims = (float(line[6:15]), float(line[15:24]), float(line[24:33]))
             if all(d > 1.0 for d in dims):
-                return dims, "the CRYST1 record"
+                out.append(("the CRYST1 record", dims))
+            break
+
+    if json_path.exists():
+        try:
+            blob = json.loads(json_path.read_text())
+        except (ValueError, OSError):
+            blob = None
+        if isinstance(blob, dict):
+            for key in ("box", "box_size", "boxsize", "dimensions", "cell", "pbc"):
+                v = blob.get(key)
+                if isinstance(v, (list, tuple)) and len(v) >= 3:
+                    with contextlib.suppress(TypeError, ValueError):
+                        out.append((f"packmol-memgen.json['{key}']",
+                                    tuple(float(x) for x in v[:3])))
+            if not any("json" in s for s, _ in out):
+                print(f"note: {json_path.name} has no recognised box key; top-level keys are "
+                      f"{sorted(blob)[:12]}", file=sys.stderr)
+
     if packmol_inp.exists():
         lo, hi = None, None
         for line in packmol_inp.read_text().splitlines():
@@ -85,8 +114,41 @@ def box_dims(lines, packmol_inp: Path):
                 lo = v[:3] if lo is None else np.minimum(lo, v[:3])
                 hi = v[3:] if hi is None else np.maximum(hi, v[3:])
         if lo is not None:
-            return tuple(float(x) for x in (hi - lo)), f"the `inside box` bounds in {packmol_inp}"
-    return None, None
+            out.append((f"the `inside box` bounds in {packmol_inp}",
+                        tuple(float(x) for x in (hi - lo))))
+    return out
+
+
+def verify_box(dims, residues) -> tuple[bool, str]:
+    """Check the cell actually contains the packed coordinates.
+
+    PACKMOL's `inside box` constrains the molecules it places, but nothing constrains the fixed
+    solute, and the reported cell can be smaller than what was packed. If the span exceeds the
+    cell, atoms near one face wrap onto atoms near the opposite face.
+    """
+    pts = np.array([xyz for _, _, atoms in residues for _, xyz, _ in atoms])
+    span = pts.max(axis=0) - pts.min(axis=0)
+    excess = span - np.array(dims)
+    msg = (f"coordinate span {span[0]:.2f} x {span[1]:.2f} x {span[2]:.2f} A "
+           f"vs cell {dims[0]:.2f} x {dims[1]:.2f} x {dims[2]:.2f} A")
+    if (excess <= 0.5).all():
+        return True, msg + "  (fits)"
+
+    worst = []
+    for ax, name in enumerate("xyz"):
+        if excess[ax] > 0.5:
+            half = dims[ax] / 2.0
+            centre = (pts[:, ax].max() + pts[:, ax].min()) / 2.0
+            outside = defaultdict(int)
+            for _, resname, atoms in residues:
+                for _, xyz, _ in atoms:
+                    if abs(xyz[ax] - centre) > half:
+                        outside[resname] += 1
+            top = ", ".join(f"{k} x{v}" for k, v in
+                            sorted(outside.items(), key=lambda kv: -kv[1])[:5])
+            worst.append(f"    {name}: {excess[ax]:+.2f} A over; "
+                         f"{sum(outside.values())} atoms outside, mostly {top}")
+    return False, msg + "  (DOES NOT FIT)\n" + "\n".join(worst)
 
 
 def main() -> int:
@@ -113,12 +175,32 @@ def main() -> int:
     for i, j, d in ss:
         print(f"disulfide: residues {i}-{j} (SG-SG {d:.2f} A), renamed CYX")
 
-    dims, source = box_dims(lines, Path("packmol.inp"))
-    if dims is None:
-        print("ERROR: could not determine the periodic box from CRYST1 or packmol.inp.",
-              file=sys.stderr)
+    cands = box_candidates(lines, Path("packmol.inp"), Path("packmol-memgen.json"))
+    if not cands:
+        print("ERROR: could not determine the periodic box from CRYST1, packmol-memgen.json, "
+              "or packmol.inp.", file=sys.stderr)
         return 1
-    print(f"box {dims[0]:.2f} x {dims[1]:.2f} x {dims[2]:.2f} A (from {source})")
+    for src, d in cands:
+        print(f"candidate cell {d[0]:.2f} x {d[1]:.2f} x {d[2]:.2f} A (from {src})")
+
+    dims = None
+    for src, d in cands:
+        ok, msg = verify_box(d, residues)
+        if ok:
+            dims = d
+            print(f"box {d[0]:.2f} x {d[1]:.2f} x {d[2]:.2f} A (from {src}); {msg}")
+            break
+    if dims is None:
+        src, d = cands[0]
+        _, msg = verify_box(d, residues)
+        print(f"\nERROR: no candidate periodic cell contains the packed coordinates.\n{msg}\n",
+              file=sys.stderr)
+        print("Do not just enlarge the cell: that leaves a low-density gap at the faces that the\n"
+              "membrane barostat will close by collapsing the bilayer. Re-pack instead, and check\n"
+              "whether the overflowing residues are the fixed solute (not constrained by PACKMOL's\n"
+              "`inside box`) or packed lipids/water (a PACKMOL convergence failure -- see the final\n"
+              "'Maximum violation of the restraints' in packmol.log).", file=sys.stderr)
+        return 1
 
     if not any(rn in LIGAND_RESNAMES for _, rn, _ in residues):
         print()

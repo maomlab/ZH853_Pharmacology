@@ -189,8 +189,12 @@ than leaving partial residues that would open spurious cavities or drop formal c
 assigned by PROPKA at pH 7.4 [15]; the sole non-standard prediction is \textbf{D2.50
 (Asp116), pKa 7.61} --- essentially 1:1 protonated at physiological pH --- motivating the parallel-system
 design and constant-pH MD as the rigorous fallback. All four chain-R histidines are neutral; their
-HID/HIE tautomers are set from the local hydrogen-bond network because H6.52 and H7.36 line the pocket
-and a mis-assigned tautomer would perturb the interactions under study. The truncated receptor termini
+HID/HIE tautomers are set from the local hydrogen-bond network (\textbf{HIE} for H173; \textbf{HID}
+for H225, H299/6.52 and H321/7.36) because H6.52 and H7.36 line the pocket and a mis-assigned tautomer
+would perturb the interactions under study. The assignment is written into the residue name at the
+preparation stage rather than carried implicitly, since \texttt{tleap} maps a residue still named
+\texttt{HIS} to HIE irrespective of the tautomer determined upstream --- silently, and for three of
+these four sites wrongly. The truncated receptor termini
 are capped with neutral acetyl/\emph{N}-methylamide groups rather than charged termini, which would be
 artifacts on an internal transmembrane fragment.
 
@@ -244,7 +248,8 @@ bracket the 31.4\,\Ang{} slab. This thickness matches the experimental POPC hydr
 (2$D_c$=28.8\,\Ang [31]) plus the cholesterol condensing effect ($+2$--$4$\,\Ang{} for a POPC-like
 bilayer), within a phosphate-to-phosphate span of $\sim$37--40\,\Ang. For a definitive per-structure
 value the model can be submitted to the PPM~3.0 server. The receptor is embedded in a
-POPC:cholesterol (9:1) membrane using CHARMM-GUI Membrane Builder [20] --- a
+POPC:cholesterol (9:1) membrane with PACKMOL-Memgen [33] (CHARMM-GUI Membrane Builder [20] is the
+documented alternative) --- a
 widely used minimal GPCR bilayer that captures cholesterol's documented modulation of class-A receptors
 [21] while remaining tractable; a higher-cholesterol asymmetric plasma-membrane mimic
 is run as a sensitivity check since MOR is cholesterol-sensitive. The Gi heterotrimer projects into the
@@ -550,6 +555,8 @@ in \texttt{SPECIFICATION.md}; detailed methods and results are in the \texttt{do
 \bibitem{kucerka2011} Ku\v{c}erka N, Nieh M-P, Katsaras J. Fluid phosphatidylcholine bilayer structural
   parameters as a function of temperature and chain length. \emph{Biochim Biophys Acta} 2011;1808:2761.
 \bibitem{ambertools} Case DA, et al. AmberTools. \emph{J Chem Inf Model} 2023;63:6183.
+\bibitem{packmolmemgen} Schott-Verdugo S, Gohlke H. PACKMOL-Memgen: a simple-to-use, generalized
+  workflow for membrane-protein--lipid-bilayer system building. \emph{J Chem Inf Model} 2019;59:2522.
 \end{thebibliography}
 
 \end{document}
