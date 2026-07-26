@@ -74,13 +74,17 @@ location; the script refuses a non-empty directory.
 
 Two post-build steps then run automatically:
 
-- **`check_placement.py`** — PACKMOL-Memgen re-centres the solute on its own *z* bounding box. Our
-  receptor's bbox centre is ~5 Å below the OPM midplane (the intracellular face — H8, ICL3, C-term —
-  protrudes further than the extracellular face), so re-centring embeds the receptor ~5 Å too high
-  and discards the OPM placement from 02.05.00. The check measures the receptor's rigid-body shift
-  against the lipid phosphate planes and **fails the build** if the misregistration exceeds 1.5 Å,
-  also reporting the Trp/Tyr girdle position for comparison with the OPM ±15.7 Å slab. Override with
-  `SKIP_PLACEMENT_CHECK=1` only to inspect a known-bad build.
+- **`check_placement.py`** — guards the OPM placement from 02.05.00. PACKMOL-Memgen re-centres the
+  solute on its own *z* bounding box when it orients the protein itself, and our receptor's bbox
+  centre is ~5 Å below the OPM midplane (the intracellular face — H8, ICL3, C-term — protrudes
+  further than the extracellular face), so a re-centred build would sit ~5 Å too high in the membrane
+  with nothing downstream complaining. Measured 2026-07-26 with `--preoriented` on packmol-memgen
+  2025.1.29: translation `(+0.02, −0.18, +0.00) Å`, misregistration **+0.07 Å** — honoured, so this
+  is a regression guard rather than a workaround. It measures the receptor's rigid-body shift against
+  the lipid phosphate planes, **fails the build** past 1.5 Å, and reports the Trp/Tyr girdle for
+  comparison with the OPM ±15.7 Å slab (built: −16.5/+13.7 Å, P–P thickness 38.6 Å, matching the
+  37–40 Å predicted in Methods §3.7). Override with `SKIP_PLACEMENT_CHECK=1` only to inspect a
+  known-bad build.
 - **`make_tleap.py`** — fills the two `@PLACEHOLDERS@` in `tleap.in` that cannot be known until the
   system is packed, writing `tleap_run.in` plus a `bilayer_system_ff.pdb`:
   - the **disulfide**, because `loadpdb` renumbers every residue sequentially from 1 across the whole

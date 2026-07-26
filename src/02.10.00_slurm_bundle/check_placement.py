@@ -2,13 +2,18 @@
 """Verify that PACKMOL-Memgen preserved the OPM membrane registration (SPECIFICATION D-14).
 
 02.05.00 superposes the receptor onto the OPM reference (6DDF) so that the OPM midplane is at
-z = 0. PACKMOL-Memgen, however, re-centres the solute on its own z bounding box before building
-the bilayer -- and our receptor's bbox centre is ~5 A below the OPM midplane, because the
-intracellular face (H8, ICL3, C-term) protrudes further than the extracellular face. If memgen
-re-centres, the receptor ends up ~5 A too high in the membrane: the Trp/Tyr girdle falls out of
-register with the interface and hydrophobic belt residues face the headgroups.
+z = 0. Whether that survives the build is not guaranteed: PACKMOL-Memgen re-centres the solute
+when it orients it itself, and our receptor's z bounding-box centre is ~5 A below the OPM midplane
+because the intracellular face (H8, ICL3, C-term) protrudes further than the extracellular face.
+A re-centred build would sit ~5 A too high in the membrane, with the Trp/Tyr girdle out of
+register and hydrophobic belt residues facing the headgroups -- and nothing downstream would say so.
 
-This script measures the offset directly in the built system instead of assuming either way:
+MEASURED 2026-07-26 (AmberTools packmol-memgen 2025.1.29, --preoriented): the applied translation
+was (+0.02, -0.18, +0.00) A, i.e. --preoriented is honoured and the OPM frame is preserved. This
+check is therefore a regression guard, not a known-failure workaround -- it must keep passing if
+--preoriented is dropped, the receptor is re-oriented, or memgen is upgraded.
+
+The script measures the offset directly rather than assuming either way:
   1. the receptor is a rigid body common to receptor.pdb (OPM frame) and bilayer_system.pdb, so
      the z shift memgen applied is just the mean CA displacement;
   2. the bilayer midplane is measured independently from the lipid phosphate planes;
@@ -136,8 +141,8 @@ def main() -> int:
 
     print()
     print(f"FAIL: the receptor sits {offset:+.2f} A off the OPM position in the built bilayer.")
-    print("packmol-memgen re-centred the solute on its z bounding box, which is not the OPM")
-    print("midplane. Remedies, in order of preference:")
+    print("This build did not preserve the OPM frame -- most likely packmol-memgen re-centred the")
+    print("solute on its z bounding box, which is not the OPM midplane. Remedies, in preference order:")
     print(f"  1. Re-run packmol-memgen with an explicit z offset of {-offset:+.2f} A if your build")
     print("     supports it:  packmol-memgen --help | grep -iE 'translate|offset|center'")
     print("  2. Failing that, defeat the re-centring by handing memgen a receptor whose z bounding")

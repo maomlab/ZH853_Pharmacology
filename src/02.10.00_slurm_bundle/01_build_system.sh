@@ -64,9 +64,11 @@ fi
 mv -f bilayer_receptor.pdb bilayer_system.pdb
 
 # --- verify the OPM membrane registration survived the build (SPECIFICATION D-14) ------------
-# packmol-memgen re-centres the solute on its own z bounding box, which for this receptor sits
-# ~5 A below the OPM midplane that 02.05.00 established. That would embed the receptor too high
-# in the bilayer, silently. check_placement.py measures the offset against the lipid phosphate
+# Measured 2026-07-26: --preoriented is honoured, translation (+0.02, -0.18, +0.00) A, so the OPM
+# frame from 02.05.00 survives. This is a regression guard for the case where it does not -- memgen
+# re-centres the solute on its z bounding box when it orients the protein itself, and that centre is
+# ~5 A below the OPM midplane for this receptor, which would embed it too high in the bilayer with
+# nothing downstream complaining. check_placement.py measures the offset against the lipid phosphate
 # planes and fails the build rather than passing a mis-embedded system to tleap. Set
 # SKIP_PLACEMENT_CHECK=1 only to inspect a known-bad build.
 if [ "${SKIP_PLACEMENT_CHECK:-0}" != "1" ]; then
