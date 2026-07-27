@@ -44,6 +44,24 @@ else
   cp "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" "$BUILD/receptor.pdb"
 fi
 cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/check_placement.py" "$HERE/check_piercing.py" "$BUILD/"
+
+# The finalised receptor does NOT arrive with `git pull`: intermediate/ is gitignored, and 02.03.00
+# needs openmm/pdbfixer, which the cluster's zh853mor-prep env deliberately does not carry. So a
+# stale copy from an earlier run survives a pull and silently rebuilds the system with charged
+# termini and default HIE tautomers. Refuse to build from one.
+missing=""
+grep -q "^ATOM.* ACE R" "$BUILD/receptor.pdb" || missing="$missing ACE-cap"
+grep -q "^ATOM.* NME R" "$BUILD/receptor.pdb" || missing="$missing NME-cap"
+grep -qE "^ATOM.* (HID|HIE|HIP) R" "$BUILD/receptor.pdb" || missing="$missing His-tautomer-names"
+if [ -n "$missing" ]; then
+  echo "ERROR: the staged receptor is stale -- missing:$missing"
+  echo "  $REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb predates D-15 (ACE/NME caps"
+  echo "  and named His tautomers). It is gitignored, so a git pull does not update it."
+  echo "  Regenerate it in the LOCAL analysis env (needs openmm + pdbfixer):"
+  echo "      make prep-receptor prep-orient"
+  echo "  then copy intermediate/02.05.00_oriented/receptorR_oriented.pdb to this machine."
+  exit 1
+fi
 # Ligand parameters come from ligand_resp/run_resp.sh (run that first):
 cp "$HERE"/ligand_resp/ZH853.mol2 "$HERE"/ligand_resp/ZH853.frcmod "$BUILD/" 2>/dev/null || \
   echo "WARNING: ZH853.mol2/.frcmod not found -- run ligand_resp/run_resp.sh first."
