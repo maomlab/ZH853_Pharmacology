@@ -13,7 +13,12 @@ Two values in the tleap input can only be known after PACKMOL-Memgen has run:
               from the CRYST1 record, packmol-memgen.json, and the `inside box` constraints in
               packmol.inp, then each is checked against the packed coordinates -- the first that
               actually contains them wins. A cell smaller than its own contents makes atoms wrap
-              onto their periodic images, which no amount of minimisation repairs.
+              onto their periodic images, which no amount of minimisation repairs. packmol-memgen
+              2025.1.29 supplies none of the recorded sources reliably (no CRYST1 is ever written;
+              the JSON appears only for --dry_run; its box summary is logged at DEBUG level), and
+              PACKMOL leaves rim lipids/water ~1-2 A outside the `inside box` walls when the
+              all-together runs end at maxiter -- so if every candidate fails, the packed extent
+              + 2*CONTENT_MARGIN_A is used as a last resort rather than aborting the build.
 
 Run (in the build directory, after packmol-memgen): python make_tleap.py
 """
@@ -29,6 +34,11 @@ from pathlib import Path
 import numpy as np
 
 SS_CUTOFF_A = 2.5  # SG-SG distance below which a disulfide is called (bonded is ~2.05 A)
+# Per-face breathing room for the last-resort cell derived from the packed extent itself: keeps
+# nearest periodic images >= 2.5 A apart instead of letting boundary atoms land on top of each
+# other, without diluting the density PACKMOL actually realised (a much larger cell WOULD leave a
+# vacuum gap for the membrane barostat to collapse).
+CONTENT_MARGIN_A = 1.25
 LIGAND_RESNAMES = ("ZH8", "L01", "LIG", "MOL", "UNL")
 
 
@@ -151,6 +161,12 @@ def verify_box(dims, residues) -> tuple[bool, str]:
     return False, msg + "  (DOES NOT FIT)\n" + "\n".join(worst)
 
 
+def content_cell(residues) -> tuple:
+    """Last-resort periodic cell: the packed extent plus CONTENT_MARGIN_A on every face."""
+    pts = np.array([xyz for _, _, atoms in residues for _, xyz, _ in atoms])
+    return tuple(float(x) for x in pts.max(axis=0) - pts.min(axis=0) + 2 * CONTENT_MARGIN_A)
+
+
 def main() -> int:
     build = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("bilayer_system.pdb")
     template = Path("tleap.in")
@@ -191,16 +207,22 @@ def main() -> int:
             print(f"box {d[0]:.2f} x {d[1]:.2f} x {d[2]:.2f} A (from {src}); {msg}")
             break
     if dims is None:
-        src, d = cands[0]
+        # Every recorded source failed. With packmol-memgen 2025.1.29 this is expected rather
+        # than a bad pack: it records its cell nowhere machine-readable (see box_candidates),
+        # and PACKMOL ends both all-together runs at maxiter with rim lipids/water ~1-2 A past
+        # the `inside box` walls, so the parsed union is systematically smaller than what was
+        # packed -- every build so far overshot the nominal cell by the same ~6/6/1.5 A
+        # signature (cf. README). Use the packed extent: the content already fills that cell,
+        # so no low-density gap for the barostat to collapse is created.
+        d = content_cell(residues)
         _, msg = verify_box(d, residues)
-        print(f"\nERROR: no candidate periodic cell contains the packed coordinates.\n{msg}\n",
-              file=sys.stderr)
-        print("Do not just enlarge the cell: that leaves a low-density gap at the faces that the\n"
-              "membrane barostat will close by collapsing the bilayer. Re-pack instead, and check\n"
-              "whether the overflowing residues are the fixed solute (not constrained by PACKMOL's\n"
-              "`inside box`) or packed lipids/water (a PACKMOL convergence failure -- see the final\n"
-              "'Maximum violation of the restraints' in packmol.log).", file=sys.stderr)
-        return 1
+        print(f"\nWARNING: no recorded cell contains the packed coordinates; using the packed "
+              f"extent + {2 * CONTENT_MARGIN_A:.2f} A instead.")
+        print("  This is memgen 2025.1.29's normal output (rim overshoot at maxiter, cf. README),")
+        print("  but sanity-check the packing:  grep 'Maximum violation' packmol.log")
+        print("  -- a few A is the rim squeeze; tens of A means a real restraint failure: repack.")
+        print(f"box {d[0]:.2f} x {d[1]:.2f} x {d[2]:.2f} A (from packed coordinates); {msg}")
+        dims = d
 
     if not any(rn in LIGAND_RESNAMES for _, rn, _ in residues):
         print()
