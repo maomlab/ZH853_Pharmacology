@@ -152,11 +152,15 @@ Two post-build steps then run automatically:
 
 ## CUDA / modules
 OpenMM (conda-forge) bundles its own CUDA runtime, so it needs only the node's NVIDIA **driver** —
-usually **no `module load cuda` required**. **cuDNN is never needed** for OpenMM MD (only for ML
-potentials). Before the first real run, submit the pre-flight **`sbatch check_gpu_env.sh`** (step 0.5):
-it prints the modules/`nvidia-smi`/env, runs `openmm.testInstallation`, and does a real 200-step CUDA
-run, ending in a clear **PASS/FAIL** with a fix checklist. If CUDA is missing, load a CUDA module
-≤ the `nvidia-smi` "CUDA Version"; if the JIT compiler is not found,
+`module load cuda` does nothing for it and cuDNN is never needed. The env's `cuda-version` pin
+must be **≤ the driver's ceiling** (the "CUDA Version" in the `nvidia-smi` header): conda cannot
+see the driver and otherwise grabs the newest toolkit build, whose PTX the driver then refuses to
+JIT — `CUDA_ERROR_UNSUPPORTED_PTX_VERSION (222)`; this bit the H200 nodes (driver ceiling 13.2)
+with an env solved at 13.3 on 2026-08-25, fixed by `cuda-version=13.2` in
+`environment-cluster.yml`. Bump that pin when the cluster driver moves. Before the first real
+run, submit the pre-flight **`sbatch check_gpu_env.sh`** (step 0.5): it prints the
+modules/`nvidia-smi`/env, runs `openmm.testInstallation`, and does a real 200-step CUDA run,
+ending in a clear **PASS/FAIL** with a fix checklist. If the JIT compiler itself is not found,
 `export OPENMM_CUDA_COMPILER=$(which nvcc)`.
 
 ## Force field (SPECIFICATION D-12)

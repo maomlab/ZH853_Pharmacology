@@ -89,7 +89,10 @@ else
   echo "==> FAIL: CUDA is not usable here. Checklist:"
   echo "    - Are you on a GPU node? nvidia-smi above must show a GPU."
   echo "    - cuDNN is NOT needed for OpenMM -- do not add it."
-  echo "    - Load a CUDA module <= the nvidia-smi 'CUDA Version', or pin cuda-version in the env."
+  echo "    - UNSUPPORTED_PTX_VERSION (222)? The env's cuda-version pin exceeds the driver's"
+  echo "      ceiling (nvidia-smi header). conda-forge OpenMM bundles its own CUDA runtime, so"
+  echo "      'module load' cannot help -- re-pin the env:"
+  echo "        conda install -n zh853mor-sim -c conda-forge 'cuda-version=<driver ceiling>'"
   echo "    - JIT compiler error? export OPENMM_CUDA_COMPILER=\$(which nvcc)"
 fi
 exit "$rc"
