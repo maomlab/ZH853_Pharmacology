@@ -106,6 +106,16 @@ Two post-build steps then run automatically:
   cholesterol and the ligand need no hardcoded atom names) and every bond from another residue is
   tested for segment/disc intersection. Reports without failing the build: the fix (re-pack with a
   different seed) is a human decision.
+- **`fix_caps.py`** — normalises the ACE/NME caps after packing, before tleap. packmol-memgen's
+  preprocessing mangles them on this stack: reduce protonates the capping amides and a stray H
+  (`HN2`) survives the H-strip on the NME nitrogen, and the ff19SB libraries name the NME methyl
+  carbon `C` (H1/H2/H3) while 02.03.00 writes the older pdbfixer convention `CH3` — `loadpdb`
+  matches atoms by name, so the file `CH3` becomes an unknown typeless atom and tleap dies with
+  "Atom .R<NME …>.A<CH3> does not have a type" (2026-08-25 build). The script reads the expected
+  heavy atoms from `$AMBERHOME/dat/leap/lib/aminoct12.lib` itself (hardcoded ff19SB fallback),
+  renames unambiguous mismatches in place — `CH3`→`C` moves nothing — drops stray cap hydrogens
+  (leap rebuilds every H anyway), and can restore a genuinely missing heavy atom from the staged
+  receptor rigidly translated by the median CA offset. Idempotent; ACE is audited too.
 - **`make_tleap.py`** — fills the two `@PLACEHOLDERS@` in `tleap.in` that cannot be known until the
   system is packed, writing `tleap_run.in` plus a `bilayer_system_ff.pdb`:
   - the **disulfide**, because `loadpdb` renumbers every residue sequentially from 1 across the whole

@@ -43,7 +43,8 @@ if [ "$D250" = "ASH" ]; then
 else
   cp "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" "$BUILD/receptor.pdb"
 fi
-cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/check_placement.py" "$HERE/check_piercing.py" "$BUILD/"
+cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/fix_caps.py" "$HERE/check_placement.py" \
+   "$HERE/check_piercing.py" "$BUILD/"
 
 # The finalised receptor does NOT arrive with `git pull`: intermediate/ is gitignored, and 02.03.00
 # needs openmm/pdbfixer, which the cluster's zh853mor-prep env deliberately does not carry. So a
@@ -92,6 +93,13 @@ if [ ! -s bilayer_receptor.pdb ]; then
   exit 1
 fi
 mv -f bilayer_receptor.pdb bilayer_system.pdb
+
+# memgen's preprocessing mangles the neutral caps: reduce leaves stray H on the capping amide
+# (an HN2 survived the H-strip on NME), and the ff19SB libraries name the NME methyl carbon `C`
+# while 02.03.00 writes the older pdbfixer name `CH3` -- loadpdb matches atoms by NAME, so
+# tleap dies with "Atom .R<NME ...>.A<CH3> does not have a type". Normalise both caps to the
+# installed library's template (renames and stray-H removal only; geometry is untouched).
+python fix_caps.py bilayer_system.pdb receptor.pdb
 
 # --- verify the OPM membrane registration survived the build (SPECIFICATION D-14) ------------
 # Measured 2026-07-26: --preoriented is honoured, translation (+0.02, -0.18, +0.00) A, so the OPM
