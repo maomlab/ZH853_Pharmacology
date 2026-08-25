@@ -16,7 +16,14 @@ channels:
   - conda-forge
 dependencies:
   - cuda-version=13.2           # == nvidia-smi "CUDA Version" ceiling on the H200 nodes
-  - openmm                      # solver picks an openmm build made for the pinned CUDA
+  # The node driver JITs PTX up to ISA 9.2 and rejects 9.3+ (probed 2026-08-25), i.e. it cannot
+  # consume CUDA-13.3-toolchain output even though its header says "CUDA Version: 13.2".
+  # conda-forge publishes TWO openmm builds per python version built against different CUDA
+  # toolchains, and the 13.3-era ones fail with CUDA_ERROR_UNSUPPORTED_PTX_VERSION (222) here --
+  # including every py314/8.6.0 build, which is why the env must stay on this exact py312 build.
+  # Revisit when the cluster driver gains PTX 9.3 support:
+  - openmm=8.5.1=py312h5a97af1_0
+  - python=3.12                 # the known-good openmm build above is a py312 variant
   - openmmforcefields>=0.16.0   # SMIRNOFF template gen for the peptide-ligand cross-check
   - openff-toolkit
   - openff-interchange
