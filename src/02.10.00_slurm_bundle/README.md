@@ -123,14 +123,19 @@ Two post-build steps then run automatically:
     In practice none of the recorded sources ever fires with packmol-memgen 2025.1.29: it writes no
     CRYST1 record at all, `packmol-memgen.json` is only produced for `--dry_run`, and its own box
     summary goes to the DEBUG log. Worse, PACKMOL ends both all-together runs at maxiter with rim
-    lipids and water pushed ~1–2 Å past the `inside box` walls, so the parsed union is systematically
-    ~6 Å narrower (x+y) than what was packed — the 2026-08-25 cluster build reproduced the 2026-07-26
-    signature (+6.55/+5.85/+1.67 Å vs +5.6/+6.1/+1.5). When every candidate fails, `make_tleap.py`
-    therefore falls back to the packed extent + 2 × 1.25 Å with a loud WARNING instead of aborting:
-    the content already fills that cell, so no low-density gap for the membrane barostat to collapse
-    is created — categorically different from inflating a good cell. A few Å of "Maximum violation of
-    the restraints" in `packmol.log` is that same rim squeeze; tens of Å is a real restraint failure
-    (stale component PDBs, cf. step 1) and needs a repack.
+    lipids and water pushed partway past the `inside box` walls (which are per-atom constraints —
+    memgen writes `inside box` at `structure` level — so overflow atoms are real restraint
+    violations), making the parsed union systematically ~6 Å narrower (x+y) than what was packed.
+    The offset is constant in `--dist`: 82.62 → 87.85 and 92.62 → 97.87 Å for `--dist 15` vs `20`
+    (+5.24 both), i.e. systematic maxiter squeeze, not random failure — repacking does not remove it.
+    When every candidate fails, `make_tleap.py` classifies the overflow by how deep atoms reach past
+    the absolute `inside box` walls: ≤ 6 Å is **rim squeeze** (edge molecules' tails/waters poking
+    out, most of each molecule still inside — absorbed with the packed extent + 2 × 1.25 Å and a
+    loud WARNING; the content already fills that cell so no low-density gap for the membrane
+    barostat to collapse is created), anything deeper means displaced molecules (holes inside,
+    clashes across the periodic seam) and aborts. `python make_tleap.py --diagnose
+    bilayer_system.pdb` prints every candidate and this verdict without building anything.
+    Convergence context: `grep -nE "STOP|SUCCESS|Maximum violation" packmol.log`.
 | 3 | `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU |
 | 4 | `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU |
 | 5 | `04_analyze.py` | `zh853mor-sim` | CPU |
