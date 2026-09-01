@@ -419,10 +419,32 @@ if you do run a stage manually, keep the `system_eq` basename:
 python 02_equilibrate.py --prmtop system.prmtop --inpcrd system.rst7 --out system_eq
 ```
 
-Wall-time: equilibration is 1.125 M steps at 2 fs (2.25 ns over six restrained stages); production
-is `ZH_PROD_NS` (500) ns/replica at 4 fs with HMR. Size `ZH_EQ_TIME`/`ZH_PROD_TIME` from the ns/day
-your GPU reports in `prod_r*.log` — the 12 h / 48 h in the template are only a starting guess, and
-production will need restarting from `prod_r<N>.chk` if it does not fit.
+### Wall-clock estimates
+
+`submit.sh` prints an estimate for each stage before you commit to it, and warns when it exceeds
+85 % of the requested wall-time:
+
+```
+measured rate: 96.0 ns/day @2fs (system_eq.log); 190.8 ns/day @4fs (preprod2.log)
+submitted production: 12345   (3 replicas x 500 ns)
+  estimate: ~2 d 14.9 h for 500 ns at 4 fs, PER REPLICA (wall-time 48:00:00, ~131% of it)
+  WARNING: that is over 85% of the requested wall-time -- raise it in cluster.env, or expect
+           to restart from the checkpoint.
+```
+
+**No calibration run is needed.** `StateDataReporter` writes a `Speed (ns/day)` column, so every
+completed stage in the build directory measures this cluster's rate for this system. The estimator
+is pure awk because `submit.sh` runs on the login node and activates no conda env.
+
+Two rates are tracked and they are **not** interchangeable: equilibration runs at 2 fs with
+positional restraints, pre-production and production at 4 fs with HMR, so production covers roughly
+twice the simulated time per wall-clock hour. If only one has been measured the other is derived by
+scaling with the timestep and labelled `derived` — a sighting shot, since restraints and HMR both
+perturb it. On a fresh build with no logs, the estimate reads `unknown` rather than guessing.
+
+Equilibration is a fixed 1.125 M steps at 2 fs (2.25 ns over six restrained stages), so only the
+rate varies. Production length is `ZH_PROD_NS` per replica; array tasks run concurrently only if
+the queue has `ZH_REPLICAS` GPUs free. A job that hits its limit restarts from `prod_r<N>.chk`.
 
 ### cluster.env reference
 

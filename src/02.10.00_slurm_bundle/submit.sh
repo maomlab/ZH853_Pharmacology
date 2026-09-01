@@ -56,6 +56,8 @@ ENV_FILE="$ZH_CLUSTER_ENV"
 : "${ZH_EQ_TIME:=12:00:00}" ; : "${ZH_PROD_TIME:=48:00:00}" ; : "${ZH_CHECK_TIME:=00:05:00}"
 : "${ZH_REPLICAS:=3}"       ; : "${ZH_PROD_NS:=500}"      ; : "${ZH_SYS:=system}"
 : "${ZH_PREPROD_NS:=100}"   ; : "${ZH_PREPROD_TIME:=24:00:00}"
+# Fixed by the six-stage schedule in 02_equilibrate.py: 1,125,000 steps x 2 fs = 2.25 ns.
+EQ_NS=2.25
 
 SBATCH_ARGS=(
   --account="$ZH_ACCOUNT"
@@ -69,6 +71,83 @@ if [ -n "${ZH_EXTRA_SBATCH:-}" ]; then
   # shellcheck disable=SC2206 -- deliberate word-splitting: ZH_EXTRA_SBATCH holds whole flags
   SBATCH_ARGS+=($ZH_EXTRA_SBATCH)
 fi
+
+# --- wall-clock estimates ----------------------------------------------------------------------
+# No separate calibration run is needed: StateDataReporter writes a "Speed (ns/day)" column, so
+# every completed stage in this directory measures this cluster's rate for this system size.
+# Pure awk deliberately -- submit.sh runs on the login node and activates no conda env.
+#
+# Two rates matter and they are NOT interchangeable: equilibration runs at 2 fs with positional
+# restraints, production and pre-production at 4 fs with HMR, so production covers roughly twice
+# the simulated time per wall-clock hour.
+
+_speed() {  # <log> -> mean ns/day over the last 20 samples, or empty
+  [ -f "$1" ] || return 0
+  awk -F',' '
+    NR == 1 { for (i = 1; i <= NF; i++) { h = $i; gsub(/[#"]/, "", h)
+                                          if (h ~ /^Speed/) c = i }
+              next }
+    c && NF >= c && $c + 0 > 0 { v[++n] = $c + 0 }
+    END { if (n < 3) exit
+          s = 0; k = 0
+          for (i = (n > 20 ? n - 19 : 1); i <= n; i++) { s += v[i]; k++ }
+          printf "%.1f", s / k }' "$1" 2>/dev/null || true
+}
+
+_newest() {  # most recently modified of the given globs (preprod2 beats preprod, etc.)
+  # shellcheck disable=SC2012 -- ls -t is fine here; these are our own generated log names
+  ls -t $@ 2>/dev/null | head -1 || true
+}
+
+_hours() {  # "48:00:00" or "2-12:00:00" -> hours
+  awk -v t="$1" 'BEGIN { d = 0
+    if (index(t, "-") > 0) { split(t, a, "-"); d = a[1]; t = a[2] }
+    n = split(t, b, ":")
+    printf "%.3f", d * 24 + (n >= 1 ? b[1] : 0) + (n >= 2 ? b[2] : 0) / 60 + (n >= 3 ? b[3] : 0) / 3600 }'
+}
+
+_dur() {  # hours -> "3.4 h" / "1 d 5.2 h"
+  awk -v h="$1" 'BEGIN { if (h < 24) printf "%.1f h", h
+                         else printf "%d d %.1f h", int(h / 24), h - 24 * int(h / 24) }'
+}
+
+# Rates measured in THIS build directory. eq: 2 fs restrained. prod/preprod: 4 fs HMR.
+EQ_LOG="${ZH_SYS}_eq.log"
+PROD_LOG="$(_newest 'preprod*.log' 'prod_r*.log')"
+EQ_RATE="$(_speed "$EQ_LOG")"
+PROD_RATE="$(_speed "$PROD_LOG")"
+# If only one rate is known, derive the other: the timestep differs 2x and the step rate is
+# similar, so ns/day scales roughly with dt. Flagged as derived, because restraints and HMR both
+# perturb it -- it is a sighting shot, not a measurement.
+EQ_DERIVED=""; PROD_DERIVED=""
+if [ -z "$EQ_RATE" ] && [ -n "$PROD_RATE" ]; then
+  EQ_RATE="$(awk -v r="$PROD_RATE" 'BEGIN{printf "%.1f", r/2}')"
+  EQ_DERIVED=" derived from the 4 fs rate"; EQ_LOG=""
+fi
+if [ -z "$PROD_RATE" ] && [ -n "$EQ_RATE" ]; then
+  PROD_RATE="$(awk -v r="$EQ_RATE" 'BEGIN{printf "%.1f", r*2}')"
+  PROD_DERIVED=" derived from the 2 fs rate"; PROD_LOG=""
+fi
+if [ -n "$EQ_RATE" ] || [ -n "$PROD_RATE" ]; then
+  echo "measured rate: ${EQ_RATE:-?} ns/day @2fs${EQ_DERIVED:+,$EQ_DERIVED}${EQ_LOG:+ (${EQ_LOG})};" \
+       "${PROD_RATE:-?} ns/day @4fs${PROD_DERIVED:+,$PROD_DERIVED}${PROD_LOG:+ (${PROD_LOG})}"
+else
+  echo "measured rate: none yet -- the first completed stage writes a Speed column and calibrates this"
+fi
+
+estimate() {  # <ns> <rate> <walltime> <label>
+  local ns="$1" rate="$2" wall="$3" label="$4"
+  [ -n "$rate" ] || { echo "  estimate: unknown until a stage completes here"; return 0; }
+  local hrs; hrs="$(awk -v n="$ns" -v r="$rate" 'BEGIN{printf "%.3f", 24*n/r}')"
+  local wh;  wh="$(_hours "$wall")"
+  local pct; pct="$(awk -v h="$hrs" -v w="$wh" 'BEGIN{printf "%.0f", (w>0? 100*h/w : 0)}')"
+  echo "  estimate: ~$(_dur "$hrs") for ${ns} ns ${label} (wall-time ${wall}, ~${pct}% of it)"
+  # A job that dies at the limit loses everything since the last checkpoint, so say so up front.
+  if [ "$(awk -v h="$hrs" -v w="$wh" 'BEGIN{print (h > 0.85*w) ? 1 : 0}')" = "1" ]; then
+    echo "  WARNING: that is over 85% of the requested wall-time -- raise it in cluster.env," \
+         "or expect to restart from the checkpoint."
+  fi
+}
 
 # --- input checks -----------------------------------------------------------------------------
 need() { [ -f "$1" ] || die "$1 not found in $PWD. Steps 3-5 run from the build directory; see README.md."; }
@@ -96,6 +175,7 @@ case "$STAGE" in
     jid=$(submit submit_equilibrate.sbatch --time="$ZH_EQ_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
                  --job-name=zh853_eq --output=eq_%j.out)
     echo "submitted equilibration: $jid   -> ${ZH_SYS}_eq.xml + eq_qc.{json,png}"
+    estimate "$EQ_NS" "$EQ_RATE" "$ZH_EQ_TIME" "over 6 restrained stages at 2 fs"
     echo "then: ./submit.sh preprod"
     ;;
   preprod)
@@ -105,6 +185,7 @@ case "$STAGE" in
                  --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
                  --job-name=zh853_preprod --output=preprod_%j.out)
     echo "submitted pre-production: $jid   ($ZH_PREPROD_NS ns, unrestrained, discarded)"
+    estimate "$ZH_PREPROD_NS" "$PROD_RATE" "$ZH_PREPROD_TIME" "unrestrained at 4 fs, per leg"
     echo "then: ./submit.sh prod"
     ;;
   prod)
@@ -113,6 +194,8 @@ case "$STAGE" in
     jid=$(submit submit_production.sbatch --time="$ZH_PROD_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" --array="1-${ZH_REPLICAS}" \
                  --job-name=zh853_prod --output=prod_%A_%a.out)
     echo "submitted production: $jid   ($ZH_REPLICAS replicas x $ZH_PROD_NS ns)"
+    estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_PROD_TIME" "at 4 fs, PER REPLICA"
+    echo "  (array tasks run concurrently if the queue has $ZH_REPLICAS GPUs free, serially otherwise)"
     ;;
   all)
     need "${ZH_SYS}.prmtop"; need "${ZH_SYS}.rst7"
@@ -122,17 +205,26 @@ case "$STAGE" in
     eq=$(submit submit_equilibrate.sbatch --time="$ZH_EQ_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
                 --job-name=zh853_eq --output=eq_%j.out)
     echo "submitted equilibration:  $eq   -> ${ZH_SYS}_eq.xml + eq_qc.{json,png}"
+    estimate "$EQ_NS" "$EQ_RATE" "$ZH_EQ_TIME" "over 6 restrained stages at 2 fs"
     dep_eq=(--dependency="afterok:$eq")
     if [ "$DRY" -eq 1 ]; then dep_eq=(--dependency="afterok:<eq_jobid>"); fi
     pre=$(submit submit_preproduction.sbatch --time="$ZH_PREPROD_TIME" \
                  --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
                  --job-name=zh853_preprod --output=preprod_%j.out "${dep_eq[@]}")
     echo "submitted pre-production: $pre   ($ZH_PREPROD_NS ns unrestrained, discarded)"
+    estimate "$ZH_PREPROD_NS" "$PROD_RATE" "$ZH_PREPROD_TIME" "unrestrained at 4 fs, per leg"
     dep_pre=(--dependency="afterok:$pre")
     if [ "$DRY" -eq 1 ]; then dep_pre=(--dependency="afterok:<preprod_jobid>"); fi
     prod=$(submit submit_production.sbatch --time="$ZH_PROD_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" --array="1-${ZH_REPLICAS}" \
                   --job-name=zh853_prod --output=prod_%A_%a.out "${dep_pre[@]}")
     echo "submitted production:     $prod   ($ZH_REPLICAS replicas x $ZH_PROD_NS ns)"
+    estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_PROD_TIME" "at 4 fs, PER REPLICA"
+    echo
+    echo "total to last replica: ~$(awk -v e="$EQ_NS" -v er="${EQ_RATE:-0}" -v p="$ZH_PREPROD_NS" \
+        -v q="$ZH_PROD_NS" -v pr="${PROD_RATE:-0}" \
+        'BEGIN{ if (er<=0 || pr<=0) { print "unknown"; exit } h=24*e/er + 24*p/pr + 24*q/pr;
+                if (h<24) printf "%.1f h", h; else printf "%d d %.1f h", int(h/24), h-24*int(h/24) }') " \
+         "(sequential; replicas overlap if GPUs are free)"
     echo "watch: squeue -u \$USER"
     ;;
 esac
