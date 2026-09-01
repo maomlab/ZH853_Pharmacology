@@ -71,6 +71,32 @@ else
   return 1 2>/dev/null || exit 1
 fi
 
+# The GPU settings were renamed to ZH_GPU_* so they parallel ZH_CPU_*. An existing cluster.env
+# written before that has ZH_PARTITION etc., which would now be read by nothing: the file looks
+# configured, the setting is silently ignored, and submit.sh reports the new name as empty without
+# saying why. Name the mapping instead.
+_zh_stale=""
+for _zh_pair in ZH_PARTITION:ZH_GPU_PARTITION ZH_CPUS:ZH_GPU_CPUS ZH_MEM:ZH_GPU_MEM \
+                ZH_GRES:ZH_GPU_GRES ZH_EQ_TIME:ZH_GPU_EQ_TIME \
+                ZH_PREPROD_TIME:ZH_GPU_PREPROD_TIME ZH_PROD_TIME:ZH_GPU_PROD_TIME \
+                ZH_CHECK_TIME:ZH_GPU_CHECK_TIME; do
+  _zh_old="${_zh_pair%%:*}"; _zh_new="${_zh_pair##*:}"
+  if [ -n "${!_zh_old:-}" ] && [ -z "${!_zh_new:-}" ]; then
+    _zh_stale="${_zh_stale}      ${_zh_old} -> ${_zh_new}
+"
+  fi
+done
+if [ -n "$_zh_stale" ]; then
+  echo "ERROR: $ZH_CLUSTER_ENV uses the old GPU variable names, which nothing reads any more." >&2
+  echo "  GPU settings are now ZH_GPU_* so they parallel ZH_CPU_*. Rename these:" >&2
+  printf '%s' "$_zh_stale" >&2
+  echo "  (ZH_CPU_* and ZH_ACCOUNT/QOS/CONSTRAINT/MODULES/CONDA_SH/SIM_ENV/PREP_ENV are unchanged.)" >&2
+  echo "  Or start again from the template:  cp cluster.env.example cluster.env" >&2
+  unset _zh_up _zh_cand _zh_found _zh_stale _zh_pair _zh_old _zh_new
+  return 1 2>/dev/null || exit 1
+fi
+unset _zh_stale _zh_pair _zh_old _zh_new
+
 # Per-build sampling, when we are standing in a build directory.
 if [ -f "$PWD/sampling.env" ]; then
   # shellcheck disable=SC1091

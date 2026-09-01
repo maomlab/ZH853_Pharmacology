@@ -54,23 +54,23 @@ ENV_FILE="$ZH_CLUSTER_ENV"
 # Fail here, with a pointer to the file to edit, rather than letting sbatch reject the job with
 # "Invalid account or account/partition combination specified" and no indication of where it came from.
 [ -n "${ZH_ACCOUNT:-}" ]   || die "ZH_ACCOUNT is empty in $ENV_FILE (see: sacctmgr show assoc user=\$USER)."
-[ -n "${ZH_PARTITION:-}" ] || die "ZH_PARTITION is empty in $ENV_FILE (see: sinfo -s)."
+[ -n "${ZH_GPU_PARTITION:-}" ] || die "ZH_GPU_PARTITION is empty in $ENV_FILE (see: sinfo -s)."
 
-: "${ZH_GRES:=gpu:1}"       ; : "${ZH_CPUS:=8}"          ; : "${ZH_MEM:=32G}"
-: "${ZH_EQ_TIME:=12:00:00}" ; : "${ZH_PROD_TIME:=72:00:00}" ; : "${ZH_CHECK_TIME:=00:05:00}"
+: "${ZH_GPU_GRES:=gpu:1}"       ; : "${ZH_GPU_CPUS:=8}"          ; : "${ZH_GPU_MEM:=32G}"
+: "${ZH_GPU_EQ_TIME:=12:00:00}" ; : "${ZH_GPU_PROD_TIME:=72:00:00}" ; : "${ZH_GPU_CHECK_TIME:=00:05:00}"
 : "${ZH_REPLICAS:=3}"       ; : "${ZH_PROD_NS:=500}"      ; : "${ZH_SYS:=system}"
-: "${ZH_PREPROD_NS:=100}"   ; : "${ZH_PREPROD_TIME:=24:00:00}"
+: "${ZH_PREPROD_NS:=100}"   ; : "${ZH_GPU_PREPROD_TIME:=24:00:00}"
 # Fixed by the six-stage schedule in 02_equilibrate.py: 1,125,000 steps x 2 fs = 2.25 ns.
 EQ_NS=2.25
 
 : "${ZH_CPU_TIME:=04:00:00}" ; : "${ZH_CPU_CPUS:=8}" ; : "${ZH_CPU_MEM:=32G}"
-: "${ZH_CPU_PARTITION:=$ZH_PARTITION}"   # fall back to the GPU partition if no CPU one is set
+: "${ZH_CPU_PARTITION:=$ZH_GPU_PARTITION}"   # fall back to the GPU partition if no CPU one is set
 
 # The CPU stages request no --gres: parameterization and building never touch a GPU, and holding
 # one for hours of PACKMOL-Memgen would waste the allocation and queue behind GPU demand.
 case "$STAGE" in
   params|build) _part="$ZH_CPU_PARTITION"; _gres="" ;;
-  *)            _part="$ZH_PARTITION";     _gres="$ZH_GRES" ;;
+  *)            _part="$ZH_GPU_PARTITION";     _gres="$ZH_GPU_GRES" ;;
 esac
 SBATCH_ARGS=(
   --account="$ZH_ACCOUNT"
@@ -200,35 +200,35 @@ case "$STAGE" in
     ;;
   check)
     # The pre-flight is tiny; do not hold a full training-sized allocation for it.
-    jid=$(submit check_gpu_env.sh --time="$ZH_CHECK_TIME" --cpus-per-task=2 --mem=8G \
+    jid=$(submit check_gpu_env.sh --time="$ZH_GPU_CHECK_TIME" --cpus-per-task=2 --mem=8G \
                                   --job-name=zh853_gpucheck --output=gpucheck_%j.out)
     echo "submitted pre-flight: $jid   (watch: tail -f gpucheck_${jid}.out)"
     ;;
   eq)
     need "${ZH_SYS}.prmtop"; need "${ZH_SYS}.rst7"
-    jid=$(submit submit_equilibrate.sbatch --time="$ZH_EQ_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
+    jid=$(submit submit_equilibrate.sbatch --time="$ZH_GPU_EQ_TIME" --cpus-per-task="$ZH_GPU_CPUS" --mem="$ZH_GPU_MEM" \
                  --job-name=zh853_eq --output=eq_%j.out)
     echo "submitted equilibration: $jid   -> ${ZH_SYS}_eq.xml + eq_qc.{json,png}"
-    estimate "$EQ_NS" "$EQ_RATE" "$ZH_EQ_TIME" "over 6 restrained stages at 2 fs"
+    estimate "$EQ_NS" "$EQ_RATE" "$ZH_GPU_EQ_TIME" "over 6 restrained stages at 2 fs"
     echo "then: ./submit.sh preprod"
     ;;
   preprod)
     need "${ZH_SYS}.prmtop"
     [ -f "${ZH_SYS}_eq.xml" ] || echo "WARNING: ${ZH_SYS}_eq.xml not present yet -- step 3 must finish first."
-    jid=$(submit submit_preproduction.sbatch --time="$ZH_PREPROD_TIME" \
-                 --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
+    jid=$(submit submit_preproduction.sbatch --time="$ZH_GPU_PREPROD_TIME" \
+                 --cpus-per-task="$ZH_GPU_CPUS" --mem="$ZH_GPU_MEM" \
                  --job-name=zh853_preprod --output=preprod_%j.out)
     echo "submitted pre-production: $jid   ($ZH_PREPROD_NS ns, unrestrained, discarded)"
-    estimate "$ZH_PREPROD_NS" "$PROD_RATE" "$ZH_PREPROD_TIME" "unrestrained at 4 fs, per leg"
+    estimate "$ZH_PREPROD_NS" "$PROD_RATE" "$ZH_GPU_PREPROD_TIME" "unrestrained at 4 fs, per leg"
     echo "then: ./submit.sh prod"
     ;;
   prod)
     need "${ZH_SYS}.prmtop"
     [ -f "${ZH_SYS}_eq.xml" ] || echo "WARNING: ${ZH_SYS}_eq.xml not present yet -- step 3 must finish first."
-    jid=$(submit submit_production.sbatch --time="$ZH_PROD_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" --array="1-${ZH_REPLICAS}" \
+    jid=$(submit submit_production.sbatch --time="$ZH_GPU_PROD_TIME" --cpus-per-task="$ZH_GPU_CPUS" --mem="$ZH_GPU_MEM" --array="1-${ZH_REPLICAS}" \
                  --job-name=zh853_prod --output=prod_%A_%a.out)
     echo "submitted production: $jid   ($ZH_REPLICAS replicas x $ZH_PROD_NS ns)"
-    estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_PROD_TIME" "at 4 fs, PER REPLICA"
+    estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_GPU_PROD_TIME" "at 4 fs, PER REPLICA"
     echo "  (array tasks run concurrently if the queue has $ZH_REPLICAS GPUs free, serially otherwise)"
     ;;
   all)
@@ -236,23 +236,23 @@ case "$STAGE" in
     # afterok, not afterany, at both links: each stage loads the state the previous one wrote, and
     # each runs check_equilibration.py, which exits non-zero on a FAIL. So a broken system stops
     # the chain here instead of consuming ZH_REPLICAS x ZH_PROD_NS ns of GPU time.
-    eq=$(submit submit_equilibrate.sbatch --time="$ZH_EQ_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
+    eq=$(submit submit_equilibrate.sbatch --time="$ZH_GPU_EQ_TIME" --cpus-per-task="$ZH_GPU_CPUS" --mem="$ZH_GPU_MEM" \
                 --job-name=zh853_eq --output=eq_%j.out)
     echo "submitted equilibration:  $eq   -> ${ZH_SYS}_eq.xml + eq_qc.{json,png}"
-    estimate "$EQ_NS" "$EQ_RATE" "$ZH_EQ_TIME" "over 6 restrained stages at 2 fs"
+    estimate "$EQ_NS" "$EQ_RATE" "$ZH_GPU_EQ_TIME" "over 6 restrained stages at 2 fs"
     dep_eq=(--dependency="afterok:$eq")
     if [ "$DRY" -eq 1 ]; then dep_eq=(--dependency="afterok:<eq_jobid>"); fi
-    pre=$(submit submit_preproduction.sbatch --time="$ZH_PREPROD_TIME" \
-                 --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
+    pre=$(submit submit_preproduction.sbatch --time="$ZH_GPU_PREPROD_TIME" \
+                 --cpus-per-task="$ZH_GPU_CPUS" --mem="$ZH_GPU_MEM" \
                  --job-name=zh853_preprod --output=preprod_%j.out "${dep_eq[@]}")
     echo "submitted pre-production: $pre   ($ZH_PREPROD_NS ns unrestrained, discarded)"
-    estimate "$ZH_PREPROD_NS" "$PROD_RATE" "$ZH_PREPROD_TIME" "unrestrained at 4 fs, per leg"
+    estimate "$ZH_PREPROD_NS" "$PROD_RATE" "$ZH_GPU_PREPROD_TIME" "unrestrained at 4 fs, per leg"
     dep_pre=(--dependency="afterok:$pre")
     if [ "$DRY" -eq 1 ]; then dep_pre=(--dependency="afterok:<preprod_jobid>"); fi
-    prod=$(submit submit_production.sbatch --time="$ZH_PROD_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" --array="1-${ZH_REPLICAS}" \
+    prod=$(submit submit_production.sbatch --time="$ZH_GPU_PROD_TIME" --cpus-per-task="$ZH_GPU_CPUS" --mem="$ZH_GPU_MEM" --array="1-${ZH_REPLICAS}" \
                   --job-name=zh853_prod --output=prod_%A_%a.out "${dep_pre[@]}")
     echo "submitted production:     $prod   ($ZH_REPLICAS replicas x $ZH_PROD_NS ns)"
-    estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_PROD_TIME" "at 4 fs, PER REPLICA"
+    estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_GPU_PROD_TIME" "at 4 fs, PER REPLICA"
     echo
     echo "total to last replica: ~$(awk -v e="$EQ_NS" -v er="${EQ_RATE:-0}" -v p="$ZH_PREPROD_NS" \
         -v q="$ZH_PROD_NS" -v pr="${PROD_RATE:-0}" \

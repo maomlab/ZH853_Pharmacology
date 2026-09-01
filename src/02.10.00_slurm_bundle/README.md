@@ -10,7 +10,7 @@ before anything is submitted:
 ```bash
 cd <repository root>
 cp cluster.env.example cluster.env
-$EDITOR cluster.env          # ZH_ACCOUNT and ZH_PARTITION are the only ones with no default
+$EDITOR cluster.env          # ZH_ACCOUNT and ZH_GPU_PARTITION are the only ones with no default
 ```
 
 **Per-build sampling lives in `sampling.env`**, which `01_build_system.sh` writes into each build
@@ -315,7 +315,7 @@ the three with `--dependency=afterok:` — not `afterany` — because each stage
 previous one wrote, and because steps 3 and 3.5 each run `check_equilibration.py`, which exits
 non-zero on a FAIL. A broken system therefore stops the chain instead of consuming
 `ZH_REPLICAS × ZH_PROD_NS` ns of GPU time (set `ZH_QC_GATE=0` to run the QC for information only). The wrapper also checks that `system.prmtop`/`system.rst7` are actually in the
-current directory and that `ZH_ACCOUNT`/`ZH_PARTITION` are set, so a wrong directory or an unfilled
+current directory and that `ZH_ACCOUNT`/`ZH_GPU_PARTITION` are set, so a wrong directory or an unfilled
 `cluster.env` fails immediately with a pointer, rather than as a queued job that dies minutes later
 or an `Invalid account` rejection with no indication of which file to edit.
 
@@ -444,7 +444,7 @@ submitted production: 12345   (3 replicas x 500 ns)
 
 Measured on the H200 nodes for the ~180k-atom apo system (2026-09-01): **94.4 ns/day at 2 fs**
 restrained, **587 ns/day at 4 fs** with HMR — so eq takes ~0.6 h, a 100 ns pre-production leg
-~4.1 h, and 500 ns of production ~20.4 h per replica, about 25 h end to end. `ZH_PROD_TIME` ships
+~4.1 h, and 500 ns of production ~20.4 h per replica, about 25 h end to end. `ZH_GPU_PROD_TIME` ships
 as `72:00:00`, which is comfortable rather than necessary at that rate; it is kept generous because
 a job that hits the limit loses everything since its last checkpoint, and because the ligand builds
 are larger and will be slower.
@@ -474,13 +474,13 @@ the queue has `ZH_REPLICAS` GPUs free. A job that hits its limit restarts from `
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `ZH_ACCOUNT` | *(required)* | allocation to charge — `sacctmgr show assoc user=$USER` |
-| `ZH_PARTITION` | *(required)* | GPU queue — `sinfo -s` |
-| `ZH_GRES` | `gpu:1` | pin the model (`gpu:a100:1`) if the partition is mixed |
-| `ZH_CPUS` / `ZH_MEM` | `8` / `32G` | |
-| `ZH_EQ_TIME` / `ZH_PROD_TIME` / `ZH_CHECK_TIME` | `12:00:00` / `72:00:00` / `00:05:00` | measured: 500 ns/replica ≈ 20.4 h at 587 ns/day |
+| `ZH_GPU_PARTITION` | *(required)* | GPU queue — `sinfo -s` |
+| `ZH_GPU_GRES` | `gpu:1` | pin the model (`gpu:a100:1`) if the partition is mixed |
+| `ZH_GPU_CPUS` / `ZH_GPU_MEM` | `8` / `32G` | |
+| `ZH_GPU_EQ_TIME` / `ZH_GPU_PROD_TIME` / `ZH_GPU_CHECK_TIME` | `12:00:00` / `72:00:00` / `00:05:00` | measured: 500 ns/replica ≈ 20.4 h at 587 ns/day |
 | `ZH_QOS` / `ZH_CONSTRAINT` / `ZH_EXTRA_SBATCH` | empty | passed through to `sbatch` when set |
-| `ZH_PREPROD_TIME` | `24:00:00` | wall-time for the unrestrained discard leg (step 3.5) |
-| `ZH_CPU_PARTITION` | falls back to `ZH_PARTITION` | partition for the `params` and `build` array stages |
+| `ZH_GPU_PREPROD_TIME` | `24:00:00` | wall-time for the unrestrained discard leg (step 3.5) |
+| `ZH_CPU_PARTITION` | falls back to `ZH_GPU_PARTITION` | partition for the `params` and `build` array stages |
 | `ZH_CPU_TIME` / `ZH_CPU_CPUS` / `ZH_CPU_MEM` | `04:00:00` / `8` / `32G` | per CPU array task |
 
 ### sampling.env reference — per build, written by `01_build_system.sh`

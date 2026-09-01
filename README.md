@@ -36,7 +36,7 @@ the two required fields:
 
 ```bash
 cp cluster.env.example cluster.env
-$EDITOR cluster.env          # ZH_ACCOUNT and ZH_PARTITION have no default
+$EDITOR cluster.env          # ZH_ACCOUNT and ZH_GPU_PARTITION have no default
 ```
 
 Every batch stage refuses to run without it rather than falling back to defaults, which would
