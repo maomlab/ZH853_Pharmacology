@@ -39,8 +39,9 @@ done
 
 LIGANDS=("$@")
 if [ ${#LIGANDS[@]} -eq 0 ]; then
-  # every registry entry except the apo pseudo-system, which has no ligand to parameterize
-  read -r -a LIGANDS <<< "$(python "$REGISTRY" --list | sed 's/\bapo\b//')"
+  # every registry entry except the apo pseudo-system, which has no ligand to parameterize.
+  # The registry filters, not sed: \b is a GNU extension BSD sed ignores, leaving apo in the list.
+  read -r -a LIGANDS <<< "$(python "$REGISTRY" --list-ligands)"
 fi
 
 for LIGAND in "${LIGANDS[@]}"; do

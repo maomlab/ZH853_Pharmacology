@@ -3,14 +3,22 @@
 Self-contained membrane-MD workflow for the MOR–ZH853 (+Gi) complex, to run on an academic
 SLURM/GPU cluster. Prepared locally in Phase 2.
 
-**All cluster-specific values live in one file: `cluster.env`** (account, partition, GPU type,
-wall-times, replica count, modules, conda env names). Copy the template and fill in the two
-required fields before anything is submitted:
+**Site settings live in one file at the REPOSITORY ROOT: `cluster.env`** (account, partitions,
+resources, wall-times, conda env names). Copy the template and fill in the two required fields
+before anything is submitted:
 
 ```bash
+cd <repository root>
 cp cluster.env.example cluster.env
 $EDITOR cluster.env          # ZH_ACCOUNT and ZH_PARTITION are the only ones with no default
 ```
+
+**Per-build sampling lives in `sampling.env`**, which `01_build_system.sh` writes into each build
+directory: `ZH_PREPROD_NS`, `ZH_PROD_NS`, `ZH_REPLICAS`, `ZH_SYS`, `ZH_QC_GATE`, `ZH_PROD_STATE`.
+`cluster_env.sh` sources it *after* `cluster.env`, so a build's choices win. Splitting them this
+way means one edit changes the machine everywhere, while what changes the science stays with the
+build it produced — set it at build time (`ZH_PROD_NS=1000 ./01_build_system.sh`) or edit the file
+in the build directory afterwards.
 
 **Every GPU stage refuses to run without it.** `cluster_env.sh` is the single loader that
 `submit.sh`, all three `.sbatch` files and `check_gpu_env.sh` source; if `cluster.env` is absent it
@@ -23,7 +31,7 @@ settings at all and continues with a note, so a system can be built before the c
 known.
 
 `cluster.env` is gitignored — it is per-cluster and per-user, so it must not travel with the repo;
-`cluster.env.example` is the tracked template. `submit.sh` reads it and passes the values to
+`cluster.env.example` (at the repository root) is the tracked template. `submit.sh` reads it and passes the values to
 `sbatch` as **command-line flags**, which take precedence over `#SBATCH` directives in a job
 script. That is why the `.sbatch` files carry no account or partition of their own: there is one
 source of truth per cluster rather than a `CHANGEME` in each job script, duplicated again into
@@ -461,7 +469,7 @@ Equilibration is a fixed 1.125 M steps at 2 fs (2.25 ns over six restrained stag
 rate varies. Production length is `ZH_PROD_NS` per replica; array tasks run concurrently only if
 the queue has `ZH_REPLICAS` GPUs free. A job that hits its limit restarts from `prod_r<N>.chk`.
 
-### cluster.env reference
+### cluster.env reference — site-wide, at the repository root
 
 | Variable | Default | Notes |
 |----------|---------|-------|
@@ -471,10 +479,22 @@ the queue has `ZH_REPLICAS` GPUs free. A job that hits its limit restarts from `
 | `ZH_CPUS` / `ZH_MEM` | `8` / `32G` | |
 | `ZH_EQ_TIME` / `ZH_PROD_TIME` / `ZH_CHECK_TIME` | `12:00:00` / `72:00:00` / `00:05:00` | measured: 500 ns/replica ≈ 20.4 h at 587 ns/day |
 | `ZH_QOS` / `ZH_CONSTRAINT` / `ZH_EXTRA_SBATCH` | empty | passed through to `sbatch` when set |
+| `ZH_PREPROD_TIME` | `24:00:00` | wall-time for the unrestrained discard leg (step 3.5) |
+| `ZH_CPU_PARTITION` | falls back to `ZH_PARTITION` | partition for the `params` and `build` array stages |
+| `ZH_CPU_TIME` / `ZH_CPU_CPUS` / `ZH_CPU_MEM` | `04:00:00` / `8` / `32G` | per CPU array task |
+
+### sampling.env reference — per build, written by `01_build_system.sh`
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `ZH_SYS` | `system` | basename of the tleap products |
+| `ZH_PREPROD_NS` | `100` | ns per unrestrained pre-production leg; the stage resumes, so raising it adds a leg |
 | `ZH_REPLICAS` / `ZH_PROD_NS` | `3` / `500` | array size and ns per replica |
-| `ZH_PREPROD_NS` / `ZH_PREPROD_TIME` | `100` / `24:00:00` | unrestrained discard leg (step 3.5) |
 | `ZH_QC_GATE` | `1` | a `check_equilibration.py` FAIL exits the job non-zero, breaking the `afterok` chain |
 | `ZH_PROD_STATE` | empty | force the state production resumes from |
+
+Set them at build time (`ZH_PROD_NS=1000 LIGAND=ZH853 ./01_build_system.sh`) or edit
+`sampling.env` in the build directory afterwards.
 | `ZH_MODULES` | empty | normally stays empty — see CUDA / modules below |
 | `ZH_CONDA_SH` | `$(conda info --base)/…` | set only if conda is not on `PATH` in the job |
 | `ZH_SIM_ENV` / `ZH_PREP_ENV` | `zh853mor-sim` / `zh853mor-prep` | conda envs for the GPU stages / the build |

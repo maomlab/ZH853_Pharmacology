@@ -29,6 +29,26 @@ two separate envs, and deliberately does *not* carry `pdbfixer` — so the recep
 membrane orientation are local steps. `intermediate/` is git-ignored, so anything produced on one
 machine must be **copied** to the other; `git pull` will not bring it.
 
+### Configure `cluster.env` first
+
+Before any step that runs on the cluster, copy the template at the **repository root** and fill in
+the two required fields:
+
+```bash
+cp cluster.env.example cluster.env
+$EDITOR cluster.env          # ZH_ACCOUNT and ZH_PARTITION have no default
+```
+
+Every batch stage refuses to run without it rather than falling back to defaults, which would
+activate a different conda env or run for a different length and still exit 0. It is gitignored:
+per-cluster and per-user.
+
+It holds **only site facts** — account, partitions, resources, wall-times, conda env names. What
+changes the science (run lengths, replica count) lives per build in the `sampling.env` that
+`01_build_system.sh` writes into each build directory, so re-running one system with different
+sampling cannot silently inherit another build's choices, and the settings a trajectory was
+produced under sit beside the trajectory.
+
 Run `make help` for the grouped target list.
 
 | # | Step | Command | Where |
@@ -38,8 +58,8 @@ Run `make help` for the grouped target list.
 | 2 | Static analysis (Objectives 1–3) | `make analysis` | local |
 | 3 | Receptor, ligand and analog preparation | `make prep` | local |
 | 4 | Copy prep outputs to the cluster | `scp` — see below | → cluster |
-| 5 | Ligand force-field parameters | `make prep-ligand-parameterize` | either (needs AmberTools) |
-| 6 | Build the membrane systems | `LIGAND=… D250=… ./01_build_system.sh` | cluster (CPU) |
+| 5 | Ligand force-field parameters | `./submit.sh params` (4-task array) | cluster (CPU) |
+| 6 | Build the membrane systems | `./submit.sh build` (10-task array) | cluster (CPU) |
 | 7 | Equilibrate → pre-produce → produce | `./submit.sh all` (or `check` / `eq` / `preprod` / `prod`) | cluster (GPU) |
 | 8 | Trajectory QC | `04_analyze.py` | cluster |
 
@@ -85,17 +105,25 @@ Five systems (`apo`, `ZH853`, `ZH850`, `ZH831`, `ZH809`) × two D2.50 protonatio
 (`ASP`, `ASH`) = **10 builds**, each landing in
 `intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/` as a self-contained run directory:
 
-```bash
-make prep-ligand-parameterize          # step 5 -- needs AmberTools, so: conda activate zh853mor-prep
+Both CPU stages are SLURM job arrays, one task per unit of work, so they run concurrently instead
+of serially on a login node — parameterization is four `sqm` runs, and each build is ~12–15 min of
+PACKMOL-Memgen:
 
+```bash
 cd src/02.10.00_slurm_bundle
-for L in apo ZH853 ZH850 ZH831 ZH809; do                                  # step 6
-  for D in ASP ASH; do LIGAND=$L D250=$D ./01_build_system.sh || echo "FAILED: $L/$D"; done
-done
+./submit.sh params      # array 1-4:  one ligand per task  -> intermediate/02.08.00_ligand_params/
+./submit.sh build       # array 1-10: one (ligand, D2.50) per task
 ```
 
-Each build takes ~12–15 min of CPU (PACKMOL-Memgen), so take a CPU allocation rather than running
-ten of them on a login node. Then, from each build directory, `./submit.sh all`.
+Add `-n` to either to print the `sbatch` command without submitting. They request
+`ZH_CPU_PARTITION` and **no GPU** — holding one through PACKMOL-Memgen would waste the allocation.
+Parallel builds are safe by construction: each writes to its own timestamped directory, which is
+why `01_build_system.sh` insists on a pristine one.
+
+To run either without SLURM, the underlying commands still work directly:
+`make prep-ligand-parameterize`, and `LIGAND=… D250=… ./01_build_system.sh`.
+
+Then, from each build directory, `./submit.sh all`.
 
 ## Status
 Phases 0–1 and static interaction analysis (Phase 3) complete — see [`docs/PLAN.md`](docs/PLAN.md)

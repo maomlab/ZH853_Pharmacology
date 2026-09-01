@@ -86,14 +86,40 @@ cp "$HERE/02_equilibrate.py" "$HERE/03_production.py" "$HERE/04_analyze.py" \
    "$HERE/check_equilibration.py" \
    "$HERE/submit_equilibrate.sbatch" "$HERE/submit_preproduction.sbatch" \
    "$HERE/submit_production.sbatch" \
-   "$HERE/submit.sh" "$HERE/check_gpu_env.sh" "$HERE/cluster_env.sh" \
-   "$HERE/cluster.env.example" "$BUILD/"
-# cluster.env is the single source of the SLURM account/partition/GPU/wall-time. Stage it if it
-# exists so the build directory is self-contained; submit.sh also falls back to the bundle copy,
-# so a build made before cluster.env was filled in still works once it is.
-if [ -f "$HERE/cluster.env" ]; then
-  cp "$HERE/cluster.env" "$BUILD/"
-fi
+   "$HERE/submit.sh" "$HERE/check_gpu_env.sh" "$HERE/cluster_env.sh" "$BUILD/"
+# cluster.env is NOT staged: it lives once at the repository root and cluster_env.sh finds it by
+# walking up, so every build shares one set of site settings and editing it takes effect
+# everywhere. What IS written here is this build's SAMPLING -- the parameters that change the
+# science rather than the machine. Keeping them per build means re-running one system with
+# different run lengths cannot silently inherit another build's choices, and the settings a
+# trajectory was produced under sit next to the trajectory.
+#
+# Override at build time, e.g.  ZH_PROD_NS=1000 ZH_REPLICAS=5 LIGAND=ZH853 ./01_build_system.sh
+cat > "$BUILD/sampling.env" <<SAMPLING
+# Sampling settings for this build -- $LIGAND / D2.50 $D250, built $(date +%Y-%m-%d\ %H:%M:%S).
+# Sourced by cluster_env.sh AFTER the repository-root cluster.env, so these win.
+# Edit here to change this build only; nothing else reads them.
+
+ZH_SYS=${ZH_SYS:-system}          # basename of the tleap products and the equilibrated state
+
+# Unrestrained pre-production (step 3.5): equilibration, not sampling -- it is DISCARDED. The
+# 2.25 ns restrained ramp cannot equilibrate a PACKMOL-built bilayer, whose lipids start in an
+# artificially ordered extended conformation; area per lipid takes tens of ns to converge. The
+# stage RESUMES, so raising this and re-running adds a leg rather than restarting.
+ZH_PREPROD_NS=${ZH_PREPROD_NS:-100}
+
+ZH_REPLICAS=${ZH_REPLICAS:-3}     # SPECIFICATION QC wants >=3 for a replicate spread
+ZH_PROD_NS=${ZH_PROD_NS:-500}
+
+# Gate the chain on QC: when 1, a check_equilibration.py FAIL exits the eq/preprod job non-zero,
+# so anything chained with --dependency=afterok never starts on a broken system. A WARN (still
+# relaxing) does not block. Set 0 to run the QC for information only.
+ZH_QC_GATE=${ZH_QC_GATE:-1}
+
+# Force the state production resumes from. Empty = newest preprod leg, else the restrained ramp.
+ZH_PROD_STATE=${ZH_PROD_STATE:-}
+SAMPLING
+echo "wrote $BUILD/sampling.env (ligand=$LIGAND d250=$D250 preprod=${ZH_PREPROD_NS:-100}ns prod=${ZH_PROD_NS:-500}ns x${ZH_REPLICAS:-3})"
 
 # The finalised receptor does NOT arrive with `git pull`: intermediate/ is gitignored, and 02.03.00
 # needs openmm/pdbfixer, which the cluster's zh853mor-prep env deliberately does not carry. So a

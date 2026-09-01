@@ -43,13 +43,15 @@ intermediate/
 # intermediate/02.08.00_ligand_params/, both covered by the blanket `intermediate/` above. Only
 # two things are still written into the bundle directory itself:
 #
-#   cluster.env  -- the filled-in SLURM account/partition/wall-time. Per-cluster and per-user, so
-#                   never tracked; the template cluster.env.example is. See the bundle README.
-#   *.out        -- SLURM job logs, which land in the SUBMISSION directory. Steps 3-5 are
-#                   submitted from a build directory, but the GPU pre-flight (`./submit.sh check`)
-#                   can also be run from here, leaving gpucheck_<jobid>.out behind.
-src/02.10.00_slurm_bundle/cluster.env
+#   *.out  -- SLURM job logs, which land in the SUBMISSION directory. The GPU stages are submitted
+#             from a build directory (covered by `intermediate/`), but the pre-flight and the two
+#             CPU array stages are submitted from here, leaving gpucheck_/params_/build_*.out.
 src/02.10.00_slurm_bundle/*.out
+
+# Filled-in site settings: account, partitions, resources, wall-times. Per-cluster and per-user,
+# so never tracked; the template cluster.env.example is. Lives at the repository root so one edit
+# covers every build. (Per-build sampling.env sits under intermediate/, already ignored.)
+cluster.env
 
 # Regenerable dated snapshots written directly in product/ on each `make` re-run (YYYYMMDD).
 # The tracked deliverables are product/manuscript/* (stable-named figures + the compiled PDF);

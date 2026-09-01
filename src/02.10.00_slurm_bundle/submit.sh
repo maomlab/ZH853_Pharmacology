@@ -1,6 +1,8 @@
 #!/bin/bash
-# Single entry point for the GPU stages (0.5, 3, 4) of the ZH853-MOR bundle.
+# Single entry point for every batch stage of the ZH853-MOR workflow.
 #
+#   ./submit.sh params         # step 5    CPU array: ligand parameters, one task per ligand
+#   ./submit.sh build          # step 6    CPU array: system builds, one task per ligand x D2.50
 #   ./submit.sh check          # step 0.5  pre-flight: can this env run OpenMM on CUDA?
 #   ./submit.sh eq             # step 3    restrained ramp -> ${ZH_SYS}_eq.xml + eq_qc
 #   ./submit.sh preprod        # step 3.5  unrestrained equilibration (DISCARDED) -> preprod_final.xml
@@ -8,13 +10,15 @@
 #   ./submit.sh all            # eq -> preprod -> prod, chained with --dependency=afterok
 #   ./submit.sh <any> -n       # dry run: print the sbatch command, submit nothing
 #
-# Run it from the BUILD DIRECTORY (intermediate/02.10.00_build/<D250>_<timestamp>/), which
-# 01_build_system.sh stages with everything this needs.
+# WHERE TO RUN IT:
+#   params, build, check  -- from this bundle directory (src/02.10.00_slurm_bundle)
+#   eq, preprod, prod, all -- from a BUILD directory (intermediate/02.10.00_build/<name>/), which
+#                             01_build_system.sh stages with everything those stages need.
 #
-# All cluster-specific values come from cluster.env (see cluster.env.example) and are passed to
-# sbatch on the COMMAND LINE, which takes precedence over the `#SBATCH` directives inside the job
-# scripts. That is why the .sbatch files carry no account/partition/time of their own: there is one
-# source of truth per cluster, not one per job script per build.
+# Site values come from cluster.env at the REPOSITORY ROOT and are passed to sbatch on the COMMAND
+# LINE, which takes precedence over the `#SBATCH` directives inside the job scripts -- which is why
+# those files carry no account/partition/time of their own. Per-build sampling (run lengths,
+# replicas) comes from sampling.env in the build directory. See cluster_env.sh.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,7 +26,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,16p' "${BASH_SOURCE[0]}" | sed -e 's/^#$//' -e 's/^# //'
+  sed -n '2,21p' "${BASH_SOURCE[0]}" | sed -e 's/^#$//' -e 's/^# //'
   exit "${1:-0}"
 }
 
@@ -31,7 +35,7 @@ STAGE=""
 DRY=0
 for arg in "$@"; do
   case "$arg" in
-    check|eq|preprod|prod|all) [ -z "$STAGE" ] || die "give only one stage, got '$STAGE' and '$arg'."; STAGE="$arg" ;;
+    params|build|check|eq|preprod|prod|all) [ -z "$STAGE" ] || die "give only one stage, got '$STAGE' and '$arg'."; STAGE="$arg" ;;
     -n|--dry-run)      DRY=1 ;;
     -h|--help)         usage 0 ;;
     *)                 echo "ERROR: unknown argument '$arg'." >&2; usage 1 ;;
@@ -59,12 +63,21 @@ ENV_FILE="$ZH_CLUSTER_ENV"
 # Fixed by the six-stage schedule in 02_equilibrate.py: 1,125,000 steps x 2 fs = 2.25 ns.
 EQ_NS=2.25
 
+: "${ZH_CPU_TIME:=04:00:00}" ; : "${ZH_CPU_CPUS:=8}" ; : "${ZH_CPU_MEM:=32G}"
+: "${ZH_CPU_PARTITION:=$ZH_PARTITION}"   # fall back to the GPU partition if no CPU one is set
+
+# The CPU stages request no --gres: parameterization and building never touch a GPU, and holding
+# one for hours of PACKMOL-Memgen would waste the allocation and queue behind GPU demand.
+case "$STAGE" in
+  params|build) _part="$ZH_CPU_PARTITION"; _gres="" ;;
+  *)            _part="$ZH_PARTITION";     _gres="$ZH_GRES" ;;
+esac
 SBATCH_ARGS=(
   --account="$ZH_ACCOUNT"
-  --partition="$ZH_PARTITION"
-  --gres="$ZH_GRES"
+  --partition="$_part"
   --export="ALL,ZH_CLUSTER_ENV=$ENV_FILE"
 )
+[ -n "$_gres" ] && SBATCH_ARGS+=(--gres="$_gres")
 if [ -n "${ZH_QOS:-}" ];        then SBATCH_ARGS+=(--qos="$ZH_QOS"); fi
 if [ -n "${ZH_CONSTRAINT:-}" ]; then SBATCH_ARGS+=(--constraint="$ZH_CONSTRAINT"); fi
 if [ -n "${ZH_EXTRA_SBATCH:-}" ]; then
@@ -161,7 +174,30 @@ submit() {  # submit <script> <extra sbatch args...>; echoes the job id
   sbatch --parsable "${SBATCH_ARGS[@]}" "$@" "$script"
 }
 
+N_SYSTEMS=$(python "$HERE/ligands.py" --list | wc -w | tr -d ' ')
+N_LIGANDS=$(python "$HERE/ligands.py" --list-ligands | wc -w | tr -d ' ')
+
 case "$STAGE" in
+  params)
+    need ligands.py
+    n=$N_LIGANDS                  # registry entries that have a ligand
+    jid=$(submit submit_parameterize.sbatch --time="$ZH_CPU_TIME" \
+                 --cpus-per-task="$ZH_CPU_CPUS" --mem="$ZH_CPU_MEM" --array="1-${n}" \
+                 --job-name=zh853_params --output=params_%A_%a.out)
+    echo "submitted parameterization: $jid   ($n ligands, one per array task)"
+    echo "  -> intermediate/02.08.00_ligand_params/<LIGAND>/"
+    echo "then: ./submit.sh build"
+    ;;
+  build)
+    need ligands.py
+    n=$((N_SYSTEMS * 2))          # every system x {ASP, ASH}
+    jid=$(submit submit_build.sbatch --time="$ZH_CPU_TIME" \
+                 --cpus-per-task="$ZH_CPU_CPUS" --mem="$ZH_CPU_MEM" --array="1-${n}" \
+                 --job-name=zh853_build --output=build_%A_%a.out)
+    echo "submitted builds: $jid   ($N_SYSTEMS systems x 2 D2.50 states = $n array tasks)"
+    echo "  -> intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/"
+    echo "then, from each build directory: ./submit.sh all"
+    ;;
   check)
     # The pre-flight is tiny; do not hold a full training-sized allocation for it.
     jid=$(submit check_gpu_env.sh --time="$ZH_CHECK_TIME" --cpus-per-task=2 --mem=8G \

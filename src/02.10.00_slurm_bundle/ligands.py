@@ -171,6 +171,10 @@ def graft(name: str, repo: Path, out: Path) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true", help="print the buildable system names")
+    ap.add_argument("--list-ligands", action="store_true",
+                    help="print the names that have a ligand (i.e. --list minus apo). Provided so "
+                         "callers do not filter apo out with sed: `\\b` is a GNU extension that "
+                         "BSD sed silently ignores, which left apo in the array mapping.")
     ap.add_argument("--describe", action="store_true", help="print name + description per line")
     ap.add_argument("--field", help="print one field for --ligand (resname/net_charge/sdf/...)")
     ap.add_argument("--ligand")
@@ -183,6 +187,9 @@ def main() -> int:
 
     if args.list:
         print(" ".join(NAMES))
+        return 0
+    if args.list_ligands:
+        print(" ".join(LIGAND_NAMES))
         return 0
     if args.describe:
         for n in NAMES:
