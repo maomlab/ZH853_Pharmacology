@@ -88,6 +88,24 @@ class Report:
         elif verdict == "WARN":
             self.warned = True
 
+    def verdict_of(self, name):
+        return next((r[2] for r in self.rows if r[0] == name), None)
+
+    def judge_drift(self, name, value, tol, fmt="{:.2f}", unit="", soft=True, detail=""):
+        """Judge |drift| against a tolerance but DISPLAY the sign.
+
+        The sign is the diagnostically useful half: an area per lipid still falling means the
+        membrane is condensing and needs longer, while the same magnitude oscillating about a
+        plateau means it is done. Reporting abs() throws that away.
+        """
+        ok = abs(value) <= tol
+        verdict = "PASS" if ok else ("WARN" if soft else "FAIL")
+        self.values[name] = float(value)
+        arrow = "" if ok else ("  (falling)" if value < 0 else "  (rising)")
+        self.add(name, fmt.format(value) + unit + arrow, verdict,
+                 detail or f"|drift| <= {tol}{unit} over the window")
+        return ok
+
     def judge(self, name, value, lo, hi, fmt="{:.2f}", unit="", soft=False, detail=""):
         ok = lo <= value <= hi
         verdict = "PASS" if ok else ("WARN" if soft else "FAIL")
@@ -232,15 +250,15 @@ def main() -> int:
     # --- 1. thermodynamics ----------------------------------------------------------------------
     dens, temp, pe = log["density"][sel], log["temp"][sel], log["pe"][sel]
     rep.judge("density", float(dens.mean()), *DENSITY_RANGE, unit=" g/mL", fmt="{:.4f}")
-    rep.judge("density drift", abs(halves_drift(dens)), 0.0, DENSITY_DRIFT,
-              unit=" g/mL", fmt="{:.4f}", soft=True, detail=f"<= {DENSITY_DRIFT} g/mL over the stage")
+    rep.judge_drift("density drift", halves_drift(dens), DENSITY_DRIFT,
+                    unit=" g/mL", fmt="{:+.4f}")
     rep.judge("temperature", float(temp.mean()), 310 - TEMP_TOL_K, 310 + TEMP_TOL_K,
               unit=" K", fmt="{:.1f}")
     # Energy drift is scored against its own fluctuation: an absolute kJ/mol threshold is
     # meaningless across system sizes, but drift much larger than sigma means still-relaxing.
     pe_sigma = float(pe.std()) or 1.0
-    rep.judge("potential-energy drift", abs(halves_drift(pe)) / pe_sigma, 0.0, 1.0,
-              unit=" sigma", fmt="{:.2f}", soft=True, detail="<= 1 sigma of its own fluctuation")
+    rep.judge_drift("potential-energy drift", halves_drift(pe) / pe_sigma, 1.0,
+                    unit=" sigma", fmt="{:+.2f}", detail="|drift| <= 1 sigma of its own fluctuation")
 
     # --- 2. box, membrane, protein (from the trajectory) ----------------------------------------
     u = mda.Universe(args.top, str(dcd_p))
@@ -342,17 +360,26 @@ def main() -> int:
                 if ca_ok else float(np.sqrt(((lig.positions - lig_ref[0]) ** 2).sum(axis=1).mean())))
 
     box = np.array(box)
-    rep.judge("box Lx drift", abs(halves_drift(box[:, 0])), 0.0, BOX_DRIFT_A,
-              unit=" A", soft=True, detail=f"<= {BOX_DRIFT_A} A over the stage")
-    rep.judge("box Lz drift", abs(halves_drift(box[:, 2])), 0.0, BOX_DRIFT_A,
-              unit=" A", soft=True, detail=f"<= {BOX_DRIFT_A} A over the stage")
+    rep.judge_drift("box Lx drift", halves_drift(box[:, 0]), BOX_DRIFT_A, unit=" A", fmt="{:+.2f}")
+    rep.judge_drift("box Lz drift", halves_drift(box[:, 2]), BOX_DRIFT_A, unit=" A", fmt="{:+.2f}")
     rep.values["box_final_A"] = [round(float(v), 2) for v in box[-1]]
 
-    apl = np.array(apl_n if np.isfinite(apl_n).all() else apl_g)
-    apl_kind = "area/lipid" if np.isfinite(apl_n).all() else "area/lipid (gross, no protein subtraction)"
-    rep.judge(apl_kind, float(apl[-len(apl) // 2:].mean()), *APL_RANGE, unit=" A^2", soft=True)
-    rep.judge("area/lipid drift", abs(halves_drift(apl)), 0.0, 0.5, unit=" A^2", soft=True,
-              detail="<= 0.5 A^2 -- the slowest observable; expect this to fail on a short ramp")
+    # Report BOTH estimates. The protein cross-section is subtracted using an xy convex hull,
+    # which necessarily OVERestimates a non-convex 7TM bundle, so the net area per lipid is a
+    # LOWER bound and the gross value an upper one. Judging on the net alone makes a marginal
+    # reading look like a membrane problem when it may just be the hull.
+    have_net = np.isfinite(apl_n).all()
+    apl = np.array(apl_n if have_net else apl_g)
+    apl_kind = "area/lipid" if have_net else "area/lipid (gross)"
+    half = slice(-max(len(apl) // 2, 1), None)
+    if have_net:
+        rep.add("area/lipid (gross)", f"{float(np.array(apl_g)[half].mean()):.2f} A^2", "PASS",
+                "no protein subtraction -- an upper bound; the true value lies between the two")
+    rep.judge(apl_kind, float(apl[half].mean()), *APL_RANGE, unit=" A^2", soft=True,
+              detail=f"expected {APL_RANGE[0]:.0f}-{APL_RANGE[1]:.0f} A^2; convex-hull protein "
+                     "subtraction makes this a lower bound")
+    rep.judge_drift("area/lipid drift", halves_drift(apl), 0.5, unit=" A^2", fmt="{:+.2f}",
+                    detail="|drift| <= 0.5 A^2 -- the slowest observable in the system")
     rep.judge("bilayer thickness (P-P)", float(np.nanmean(thick[-len(thick) // 2:])),
               *THICK_RANGE, unit=" A", soft=True)
 
@@ -456,10 +483,26 @@ def main() -> int:
         print("==> WARN: nothing is broken, but the system is still relaxing.")
     else:
         print("==> PASS: thermodynamics and geometry are sound.")
-    print("    A short restrained ramp cannot equilibrate a PACKMOL-built bilayer: the lipids are")
-    print("    packed in an artificially ordered, extended conformation and area per lipid takes")
-    print("    tens of ns to converge. Run the unrestrained pre-production leg and re-check:")
-    print("        ./submit.sh preprod    # then: python check_equilibration.py --eq preprod ...")
+
+    # Tailor the next step to WHICH leg this is. The stage manifest only exists for the restrained
+    # ramp, so its absence means this was an unrestrained run -- and telling someone to go and run
+    # the pre-production leg they have just finished is worse than saying nothing.
+    ramp = stg_p.exists()
+    drifting = [n for n in ("area/lipid drift", "box Lz drift", "box Lx drift", "density drift")
+                if rep.verdict_of(n) == "WARN"]
+    if ramp:
+        print("    A short restrained ramp cannot equilibrate a PACKMOL-built bilayer: the lipids")
+        print("    are packed in an artificially ordered, extended conformation and area per lipid")
+        print("    takes tens of ns to converge. Run the unrestrained leg and re-check:")
+        print("        ./submit.sh preprod")
+    elif drifting:
+        print(f"    Volume has settled, but {', '.join(drifting)} still moving: the membrane is")
+        print("    condensing laterally, which outlasts volume equilibration. Read the SIGN above --")
+        print("    consistently falling or rising means keep going, oscillating about a plateau means")
+        print("    it is done. To extend, raise ZH_PREPROD_NS in cluster.env and resubmit; or start")
+        print("    production and discard the first tens of ns as equilibration.")
+    else:
+        print("    Ready for production:  ./submit.sh prod")
     return 0
 
 

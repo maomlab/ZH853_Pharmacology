@@ -331,11 +331,22 @@ It judges convergence on the **final, least-restrained stage only** (read from
 |-------|--------|--------------------|
 | Thermodynamics | density (0.98–1.10 g/mL) and its drift, temperature (310 ± 2 K), potential-energy drift vs its own σ | FAIL on absolute range, WARN on drift |
 | Box | `Lx`/`Lz` drift between halves of the final stage | WARN |
-| Membrane | area per lipid (55–70 Å², protein cross-section subtracted via an xy convex hull) and its drift, P–P thickness (34–44 Å) | WARN |
+| Membrane | area per lipid, reported **as a bracket** — gross (no protein subtracted, an upper bound) and net (xy convex hull subtracted, a lower bound, judged against 55–70 Å²) — plus its drift and P–P thickness (34–44 Å) | WARN |
 
 | Packing | waters left in the lipid core, excluding those within 6 Å of the protein; ring piercing on the final frame via `check_piercing.py` | WARN |
 | Protein | Cα RMSD whole (≤3 Å) and membrane-embedded (≤2 Å) vs the staged receptor, **superposed**; C142–C219 SG–SG (1.9–2.3 Å), found as the bonded pair among all SG atoms | FAIL |
 | Registration | vertical drift out of the OPM slab vs frame 0 (≤2 Å) | FAIL |
+
+**Drifts are reported with their sign**, because that is the half that tells you what to do: an
+area per lipid consistently *falling* means the membrane is still condensing and needs longer,
+while the same magnitude oscillating about a plateau means it is finished. The closing advice is
+also tailored to which leg was checked — after the restrained ramp it points at the pre-production
+leg; after an unrestrained leg it names whichever observables are still moving.
+
+The area per lipid is a **bracket, not a number**. The protein cross-section is subtracted with an
+xy convex hull, which necessarily overestimates a non-convex 7TM bundle, so the net value is a
+lower bound and the gross value an upper one; the truth is between them. A net reading a little
+under 55 Å² alongside a healthy gross value is the hull, not the membrane.
 
 FAIL means something is physically wrong and exits non-zero; WARN means still relaxing and exits 0.
 The header line prints the lipid inventory and a residue census, which is the first thing to read
