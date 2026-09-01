@@ -42,6 +42,31 @@ def pdb_element(line: str) -> str:
     return (name[0] if not name[0].isdigit() else name[1:2]).upper()
 
 
+# GAFF/GAFF2 use `cl` and `br` for the halogens. Everything else is the element in the first
+# character -- including the many two-letter CARBON and NITROGEN types (ca, cc, cp, na, nb ...),
+# which is why only the unambiguous halogens are special-cased: GAFF `ca` is aromatic carbon,
+# not calcium.
+_MOL2_TWO_LETTER = {"cl": "CL", "br": "BR"}
+
+
+def mol2_element(type_field: str, name: str) -> str:
+    """Element for a mol2 atom, from the type column, falling back to the atom name.
+
+    The type column is NOT always SYBYL. antechamber is run with `-at gaff2`, so it holds GAFF2
+    atom types: `c3`, `ca`, `hc`, `h1`, `n`, `os` -- not `C.3`, `H`, `N.am`. Reading it as SYBYL
+    (split on '.', uppercase) yields "C3"/"HC", so no atom compares equal to "H", every hydrogen
+    survives a heavy-atom filter, and the count comes out as the whole molecule.
+    """
+    t = type_field.split(".")[0].strip().lower()
+    if t in _MOL2_TWO_LETTER:
+        return _MOL2_TWO_LETTER[t]
+    if t and t[0].isalpha():
+        return t[0].upper()
+    # No usable type: fall back to the atom name (antechamber generates element+index).
+    n = name.strip().lstrip("0123456789")
+    return n[:1].upper() if n else ""
+
+
 def read_mol2_atoms(path: Path) -> list[tuple[str, str]]:
     """[(atom_name, element)] from a mol2 @<TRIPOS>ATOM block, in file order."""
     out, in_block = [], False
@@ -53,8 +78,7 @@ def read_mol2_atoms(path: Path) -> list[tuple[str, str]]:
         if in_block and s:
             f = s.split()
             if len(f) >= 6:
-                # SYBYL type is element[.hybridisation], e.g. C.3, N.am, O.co2
-                out.append((f[1], f[5].split(".")[0].upper()))
+                out.append((f[1], mol2_element(f[5], f[1])))
     return out
 
 
@@ -95,6 +119,14 @@ def main() -> int:
               f"{len(mol2_heavy)} in {args.mol2}.", file=sys.stderr)
         print("  These must be the same molecule in the same order. Either the mol2 was built from", file=sys.stderr)
         print("  a different SDF than the pose, or packing lost atoms. Not renaming anything.", file=sys.stderr)
+        seen = {}
+        for _, e in mol2:
+            seen[e] = seen.get(e, 0) + 1
+        print(f"  mol2 elements as parsed: "
+              + ", ".join(f"{k or '?'}x{v}" for k, v in sorted(seen.items())), file=sys.stderr)
+        print(f"  ({len(mol2)} atoms total, {len(mol2_heavy)} non-H). If hydrogens are missing "
+              "from that census the", file=sys.stderr)
+        print("  type column was misread -- see mol2_element().", file=sys.stderr)
         return 1
 
     mismatch = [(k, pdb_element(lines[i]), mol2_heavy[k][1])
