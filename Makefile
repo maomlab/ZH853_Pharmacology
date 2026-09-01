@@ -101,7 +101,12 @@ prep-orient: prep-receptor  ## Orient receptor to membrane normal (z) for PACKMO
 prep-ligand:  ## Protonated ZH853 + parameterization inputs -> intermediate/
 	python src/02.04.00_ligand_prep.py
 
-prep-analogs: prep-orient prep-ligand  ## ZH850/ZH831/ZH809 poses by scaffold transfer from ZH853
+# No prerequisites ON PURPOSE. Its only input is intermediate/02.05.00_oriented/complex_oriented.pdb
+# and rdkit, and the script checks for that itself. Depending on prep-orient would drag in
+# prep-receptor, which needs pdbfixer/openmm -- absent from the cluster prep env by design -- so
+# this target would be unrunnable on the cluster for a step that has no such requirement.
+# `make prep` still runs the whole chain in order.
+prep-analogs:  ## ZH850/ZH831/ZH809 poses by scaffold transfer from ZH853 (needs only complex_oriented.pdb)
 	python src/02.07.00_analog_poses.py
 
 membrane-plot: prep-orient  ## Membrane-placement determination plot -> manuscript (panel B)

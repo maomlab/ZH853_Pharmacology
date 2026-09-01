@@ -274,7 +274,17 @@ def main() -> int:
     ori_dir = paths.INTERMEDIATE / "02.05.00_oriented"
     cx_path = ori_dir / "complex_oriented.pdb"
     if not cx_path.exists():
-        print(f"ERROR: {cx_path} not found -- run `make prep-orient` first.", file=sys.stderr)
+        print(f"ERROR: {cx_path} not found.", file=sys.stderr)
+        print("  This is the only input this step needs (that and rdkit). Two ways to get it:",
+              file=sys.stderr)
+        print("   - in the LOCAL analysis env:  make prep-receptor prep-orient", file=sys.stderr)
+        print("     (needs openmm + pdbfixer, which the cluster prep env does not carry by design)",
+              file=sys.stderr)
+        print("   - or copy the file across; intermediate/ is gitignored, so a git pull will not",
+              file=sys.stderr)
+        print("     bring it:  scp <local>/intermediate/02.05.00_oriented/complex_oriented.pdb \\",
+              file=sys.stderr)
+        print(f"                    <host>:{cx_path}", file=sys.stderr)
         return 1
 
     template = template_from_complex(cx_path)
