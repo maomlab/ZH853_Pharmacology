@@ -112,14 +112,17 @@ if [ -n "$missing" ]; then
   echo "  then copy intermediate/02.05.00_oriented/receptorR_oriented.pdb to this machine."
   exit 1
 fi
-# Ligand parameters come from ligand_resp/run_resp.sh, per ligand. Missing parameters used to be a
-# warning; it is an error now, because the build would otherwise proceed and produce a system
-# without the ligand it claims to have.
+# Ligand parameters come from src/02.08.00_ligand_parameterize.sh, per ligand, and live under
+# intermediate/ -- src/ holds code, not generated data. Missing parameters used to be a warning;
+# it is an error now, because the build would otherwise proceed and produce a system without the
+# ligand it claims to have. (ligands.py --check above already covers this; belt and braces, since
+# this is the step that would silently mis-build.)
 if [ "$LIGAND" != "apo" ]; then
-  LIGDIR="$HERE/ligand_resp/$LIGAND"
+  LIGDIR="$(python "$HERE/ligands.py" --field params_dir --ligand "$LIGAND" --repo "$REPO")"
   if [ ! -f "$LIGDIR/$LIGAND.mol2" ] || [ ! -f "$LIGDIR/$LIGAND.frcmod" ]; then
     echo "ERROR: $LIGDIR/$LIGAND.{mol2,frcmod} not found."
-    echo "  Parameterize the ligand first:  ./ligand_resp/run_resp.sh $LIGAND"
+    echo "  Parameterize the ligand first:  make prep-ligand-parameterize"
+    echo "  (or: bash src/02.08.00_ligand_parameterize.sh $LIGAND)"
     exit 1
   fi
   cp "$LIGDIR/$LIGAND.mol2" "$LIGDIR/$LIGAND.frcmod" "$BUILD/"

@@ -442,13 +442,11 @@ def _generate():
     if bad:
         print(f"\nWARNING: {len(bad)} pose(s) clash with the receptor (< {CLASH_A} A). "
               "Equilibration may not resolve a buried overlap -- inspect before building.")
-    # Both commands live in the SLURM bundle and are relative to it, not to wherever this was
-    # run from -- `make prep-analogs-pose` runs from the repository root, so an unqualified
-    # "./ligand_resp/run_resp.sh" is a path that does not exist here.
     bundle = (paths.SRC / "02.10.00_slurm_bundle").relative_to(paths.ROOT)
-    print(f"\nNext, from the SLURM bundle directory ({bundle}), not from here:")
+    print("\nNext -- parameterize (from the repository root, needs AmberTools):")
+    print( "    make prep-ligand-parameterize")
+    print(f"then build, from the SLURM bundle directory ({bundle}), not from here:")
     print(f"    cd {bundle}")
-    print( "    for L in ZH850 ZH831 ZH809; do ./ligand_resp/run_resp.sh $L; done")
     print( "    LIGAND=ZH850 D250=ASP ./01_build_system.sh          # one build per ligand x D250")
     print(f"See {bundle}/README.md for the full 5 x 2 panel and the GPU stages.")
     return 0, rows

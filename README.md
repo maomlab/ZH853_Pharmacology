@@ -38,7 +38,7 @@ Run `make help` for the grouped target list.
 | 2 | Static analysis (Objectives 1–3) | `make analysis` | local |
 | 3 | Receptor, ligand and analog preparation | `make prep` | local |
 | 4 | Copy prep outputs to the cluster | `scp` — see below | → cluster |
-| 5 | Ligand force-field parameters | `ligand_resp/run_resp.sh <LIGAND>` | cluster (CPU) |
+| 5 | Ligand force-field parameters | `make prep-ligand-parameterize` | either (needs AmberTools) |
 | 6 | Build the membrane systems | `LIGAND=… D250=… ./01_build_system.sh` | cluster (CPU) |
 | 7 | Equilibrate → pre-produce → produce | `./submit.sh all` (or `check` / `eq` / `preprod` / `prod`) | cluster (GPU) |
 | 8 | Trajectory QC | `04_analyze.py` | cluster |
@@ -86,8 +86,9 @@ Five systems (`apo`, `ZH853`, `ZH850`, `ZH831`, `ZH809`) × two D2.50 protonatio
 `intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/` as a self-contained run directory:
 
 ```bash
+make prep-ligand-parameterize          # step 5 -- needs AmberTools, so: conda activate zh853mor-prep
+
 cd src/02.10.00_slurm_bundle
-for L in ZH853 ZH850 ZH831 ZH809; do ./ligand_resp/run_resp.sh $L; done   # step 5
 for L in apo ZH853 ZH850 ZH831 ZH809; do                                  # step 6
   for D in ASP ASH; do LIGAND=$L D250=$D ./01_build_system.sh || echo "FAILED: $L/$D"; done
 done
@@ -110,7 +111,7 @@ that were OQ-3 now live in one `cluster.env`. The **apo/ASP** arm is furthest al
 equilibrated, and through an unrestrained pre-production leg (measured on the H200 nodes: 94.4 ns/day
 at 2 fs, 587 ns/day at 4 fs, so ~25 h end to end per system). The ligand arms are not yet built.
 Open items: RESP charges still use the AM1-BCC route pending the QM-engine question (the remaining
-`TODO(OQ-3)` in `ligand_resp/run_resp.sh`); MD occupancy validation; Phase 6 free energy.
+`TODO(OQ-3)` in `src/02.08.00_ligand_parameterize.sh`); MD occupancy validation; Phase 6 free energy.
 
 ## Environment
 Four conda environments, created from the specs in the repo root:

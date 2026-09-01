@@ -24,6 +24,10 @@ from pathlib import Path
 
 RESNAME = "LIG"  # resname in the built system, for every ligand
 
+# GAFF2/AM1-BCC parameters, written by src/02.08.00_ligand_parameterize.sh. Under intermediate/
+# rather than beside the script: src/ holds code, not generated data.
+PARAMS_REL = "intermediate/02.08.00_ligand_params"
+
 # net_charge is the formal charge antechamber is told to fit to (-nc); all four carry the
 # protonated Tyr1 alpha-amine that salt-bridges D3.32 (Asp149), hence +1.
 LIGANDS: dict[str, dict] = {
@@ -78,6 +82,11 @@ def resolve_complex(name: str, repo: Path) -> Path | None:
     return None
 
 
+def params_dir(name: str, repo: Path) -> Path:
+    """Where <name>.mol2 / <name>.frcmod live."""
+    return repo / PARAMS_REL / name
+
+
 def missing_inputs(name: str, repo: Path) -> list[str]:
     """Which prep artefacts a build of `name` still needs. Empty means ready."""
     spec = get(name)
@@ -88,6 +97,11 @@ def missing_inputs(name: str, repo: Path) -> list[str]:
         missing.append("oriented receptor+ligand complex: " + " or ".join(spec["complex"]))
     if not (repo / spec["sdf"]).exists():
         missing.append(f"prepared ligand SDF: {spec['sdf']}")
+    d = params_dir(name, repo)
+    for ext in ("mol2", "frcmod"):
+        if not (d / f"{name}.{ext}").exists():
+            missing.append(f"force-field parameters: {PARAMS_REL}/{name}/{name}.{ext}"
+                           "  (make prep-ligand-parameterize)")
     return missing
 
 
@@ -181,9 +195,13 @@ def main() -> int:
             print(f"ERROR: cannot build '{args.check}' -- missing prep inputs:", file=sys.stderr)
             for m in missing:
                 print(f"  - {m}", file=sys.stderr)
-            print("  Only ZH853 has a deposited pose; the analogs need one generated before they",
-                  file=sys.stderr)
-            print("  can be simulated (see README 'Ligands and the apo system').", file=sys.stderr)
+            # Only mention pose generation when the POSE is what is missing; when parameters are
+            # the only gap the hint sends the reader to the wrong step.
+            if any("complex" in m or "SDF" in m for m in missing):
+                print("  Only ZH853 has a deposited pose; the analogs get one by scaffold transfer:",
+                      file=sys.stderr)
+                print("      make prep-analogs-pose      (see README 'Ligands and the apo system')",
+                      file=sys.stderr)
             return 1
         return 0
     if args.graft:
@@ -192,6 +210,8 @@ def main() -> int:
         spec = get(args.ligand or "apo")
         if args.field == "resname":
             print(RESNAME if (args.ligand or "apo") != "apo" else "")
+        elif args.field == "params_dir":
+            print(params_dir(args.ligand, Path(args.repo).resolve()))
         elif args.field == "complex":
             p = resolve_complex(args.ligand, Path(args.repo).resolve())
             print(p or "")

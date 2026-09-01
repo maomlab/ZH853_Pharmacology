@@ -24,7 +24,8 @@
         fetch \
         qc interactions mutations analogs design interaction-map depictions analysis \
         prep-complex-split prep-receptor-protonate prep-receptor-rebuild \
-        prep-ZH853-protonate prep-receptor-orient prep-analogs-pose prep \
+        prep-ZH853-protonate prep-receptor-orient prep-analogs-pose \
+        prep-ligand-parameterize prep \
         membrane-plot \
         molstar-render figures manuscript clean-intermediate
 
@@ -86,7 +87,7 @@ depictions:  ## 2D vector ligand depictions -> manuscript fig4 (Obj 3)
 
 analysis: qc interactions mutations analogs design  ## Run the full static-analysis pipeline
 
-## MD system prep - Phase 2  [local env; outputs feed the SLURM bundle]
+## MD system prep - Phase 2  [local env, EXCEPT prep-ligand-parameterize; feeds the SLURM bundle]
 # Targets are prep-<object>-<action> and are listed in script order, so `make help` reads as the
 # running order. The receptor is oriented (02.05.00) AFTER the ligand is prepared (02.04.00)
 # because that is the script numbering; the two are independent.
@@ -113,6 +114,11 @@ prep-receptor-orient: prep-receptor-rebuild  ## 02.05.00  Superpose onto OPM so 
 prep-analogs-pose:  ## 02.07.00  ZH850/ZH831/ZH809 poses by scaffold transfer from ZH853 (also runs in zh853mor-prep on the cluster)
 	python src/02.07.00_analog_poses.py
 
+prep-ligand-parameterize:  ## 02.08.00  GAFF2/AM1-BCC parameters for every ligand -> intermediate/ [needs AmberTools: zh853mor-prep, NOT zh853mor-local]
+	bash src/02.08.00_ligand_parameterize.sh
+
+# prep-ligand-parameterize is deliberately NOT here: it needs AmberTools (zh853mor-prep), and
+# every other target in this Makefile runs in zh853mor-local. Run it separately, in that env.
 prep: prep-complex-split prep-receptor-protonate prep-receptor-rebuild prep-ZH853-protonate \
       prep-receptor-orient prep-analogs-pose  ## Run the full Phase-2 local prep, in script order
 

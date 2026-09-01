@@ -133,9 +133,11 @@ it was called. Three things were needed, and each is checked rather than assumed
   failure was building apo while believing otherwise, and a warning in a long log is how that went
   unnoticed.
 
-Parameterize each ligand first — `./ligand_resp/run_resp.sh ZH853` — which writes
-`ligand_resp/<LIGAND>/<LIGAND>.{mol2,frcmod}` (per-ligand subdirectories because antechamber's
-fixed-name scratch files would otherwise collide).
+Parameterize each ligand first with `make prep-ligand-parameterize` (from the repository root,
+in `zh853mor-prep` — it needs AmberTools). That writes
+`intermediate/02.08.00_ligand_params/<LIGAND>/<LIGAND>.{mol2,frcmod}`, which `01_build_system.sh`
+stages into the build directory. It lives outside this bundle
+(`src/02.08.00_ligand_parameterize.sh`) because it needs neither a GPU nor SLURM.
 
 ## Conda environments (three, task-specific)
 They are split because their `openmm` pins are mutually incompatible (`openmm-plumed` lags the
@@ -157,7 +159,7 @@ you `cd` into and submit from. Nothing in steps 3–5 is invoked out of `src/`.
 |------|--------|-----|-------|----------|
 | 0 | `00_install.sh` | — | login node (builds the envs) | `src/02.10.00_slurm_bundle/` |
 | 0.5 | `./submit.sh check` → `check_gpu_env.sh` | `zh853mor-sim` | **GPU (pre-flight)** | either |
-| 1 | `ligand_resp/run_resp.sh <LIGAND>` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
+| 1 | `make prep-ligand-parameterize` (`src/02.08.00_ligand_parameterize.sh`) | `zh853mor-prep` | CPU | repository root |
 | 2 | `LIGAND=<name> ./01_build_system.sh` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
 | 2e | `ligands.py --graft` / `fix_ligand.py` | `zh853mor-prep` | CPU (called by step 2) | — |
 | 2a | `check_placement.py` | `zh853mor-prep` | CPU (called by step 2) | — |

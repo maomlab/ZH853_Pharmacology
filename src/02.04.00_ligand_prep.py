@@ -85,7 +85,7 @@ def main() -> int:
              "derivation (SPECIFICATION D-3):",
              "```bash",
              "# generate conformers -> Psi4/Gaussian ESP -> RESP fit (2-stage) -> mol2 with RESP charges",
-             "# (script staged in the SLURM bundle: src/02.10.00_slurm_bundle/ligand_resp/)",
+             "# (see src/02.08.00_ligand_parameterize.sh / `make prep-ligand-parameterize`)",
              "```",
              "**C. OpenFF cross-check** — independent SMIRNOFF parameters via openmmforcefields "
              "SystemGenerator (`SMIRNOFFTemplateGenerator`, openff-2.x).",
