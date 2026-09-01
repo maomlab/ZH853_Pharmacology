@@ -39,8 +39,17 @@ NS="${ZH_PROD_NS:-500}"
 # so say loudly which one is being used rather than letting it pass unnoticed.
 STATE="${ZH_PROD_STATE:-}"
 if [ -z "$STATE" ]; then
-  if [ -f preprod_final.xml ]; then
-    STATE=preprod_final.xml
+  # Newest pre-production leg (preprod, preprod2, ...), since the stage can be re-run to extend.
+  NEWEST=""
+  L=1
+  while :; do
+    N=$([ "$L" -eq 1 ] && echo preprod || echo "preprod${L}")
+    [ -f "${N}_final.xml" ] || break
+    NEWEST="${N}_final.xml"
+    L=$((L + 1))
+  done
+  if [ -n "$NEWEST" ]; then
+    STATE="$NEWEST"
   else
     STATE="${SYS}_eq.xml"
     echo "WARNING: preprod_final.xml not found -- starting production straight from the restrained"

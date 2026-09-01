@@ -394,7 +394,15 @@ after step 3 — that is the normal result, not a fault.
 
 Step 3.5 is that time: `ZH_PREPROD_NS` (default 100) ns of unrestrained NPT, physically identical to
 production (so there is no separate script — it is `03_production.py` with seed 0), **discarded**,
-then re-checked. Raise `ZH_PREPROD_NS` if `area/lipid drift` is still WARN afterwards. It also fixes
+then re-checked. **It resumes rather than restarts**: legs are `preprod`, `preprod2`, `preprod3` …,
+each continuing from the previous one's final state, so re-running `./submit.sh preprod` when the QC
+says "still condensing" costs only the extra time instead of redoing what you already have.
+Production picks the newest leg automatically.
+
+Judge convergence on **`area/lipid drift (gross)`**, not the net one. The net value also moves when
+the receptor's convex hull breathes, which is not membrane condensation: on a real 100 ns leg the
+net drift read −1.29 Å² of which only −0.65 Å² was box area, the remainder being +64 Å² of hull as
+the protein relaxed. Judging on the net overstates how far the membrane still has to go. It also fixes
 a smaller problem: stage 6 of the ramp still holds the backbone at 10 kJ/mol/nm², so without this leg
 production would resume from a state never sampled unrestrained.
 

@@ -38,14 +38,37 @@ conda activate "${ZH_SIM_ENV:-zh853mor-sim}"
 SYS="${ZH_SYS:-system}"
 NS="${ZH_PREPROD_NS:-100}"
 
-echo "host: $(hostname)  job: ${SLURM_JOB_ID:-none}  unrestrained pre-production: ${NS} ns"
+# Pre-production RESUMES rather than restarts. The membrane is the slow degree of freedom and one
+# leg is often not enough -- but re-running this script used to start again from the restrained
+# ramp, silently discarding the leg already computed. Legs are preprod, preprod2, preprod3 ...,
+# each continuing from the previous one's final state, so "it needs longer" costs only the extra
+# time. Re-run this stage as many times as the QC says.
+LEG=1
+PREV=""
+while :; do
+  NAME=$([ "$LEG" -eq 1 ] && echo preprod || echo "preprod${LEG}")
+  [ -f "${NAME}_final.xml" ] || break
+  PREV="$NAME"
+  LEG=$((LEG + 1))
+done
+OUT=$([ "$LEG" -eq 1 ] && echo preprod || echo "preprod${LEG}")
+if [ -n "$PREV" ]; then
+  STATE="${PREV}_final.xml"
+  echo "continuing pre-production from ${STATE} (leg ${LEG}); cumulative >= $(( (LEG - 1) * NS + NS )) ns"
+else
+  STATE="${SYS}_eq.xml"
+  echo "starting pre-production from the restrained ramp (${STATE})"
+fi
+[ -f "$STATE" ] || { echo "ERROR: state file $STATE not found in $PWD."; exit 1; }
+
+echo "host: $(hostname)  job: ${SLURM_JOB_ID:-none}  unrestrained: ${NS} ns -> ${OUT}"
 python -c "import openmm; print('openmm', openmm.version.version)"
 
 # seed 0 marks the discard leg; production replicas use seeds 1..ZH_REPLICAS.
 python 03_production.py \
   --prmtop "${SYS}.prmtop" \
-  --state  "${SYS}_eq.xml" \
-  --out    preprod \
+  --state  "${STATE}" \
+  --out    "${OUT}" \
   --ns "${NS}" --seed 0
 
 # Re-assess on the equilibrated-for-real trajectory. With ZH_QC_GATE=1 (default) a FAIL exits
@@ -53,7 +76,7 @@ python 03_production.py \
 # system -- the whole point of checking before spending replica-days of GPU time. A WARN exits 0.
 echo
 if [ "${ZH_QC_GATE:-1}" = "1" ]; then
-  python check_equilibration.py --top "${SYS}.prmtop" --eq preprod --receptor receptor.pdb --out preprod_qc
+  python check_equilibration.py --top "${SYS}.prmtop" --eq "${OUT}" --receptor receptor.pdb --out "${OUT}_qc"
 else
-  python check_equilibration.py --top "${SYS}.prmtop" --eq preprod --receptor receptor.pdb --out preprod_qc || true
+  python check_equilibration.py --top "${SYS}.prmtop" --eq "${OUT}" --receptor receptor.pdb --out "${OUT}_qc" || true
 fi

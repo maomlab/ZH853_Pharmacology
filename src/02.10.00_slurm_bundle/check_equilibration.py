@@ -378,8 +378,17 @@ def main() -> int:
     rep.judge(apl_kind, float(apl[half].mean()), *APL_RANGE, unit=" A^2", soft=True,
               detail=f"expected {APL_RANGE[0]:.0f}-{APL_RANGE[1]:.0f} A^2; convex-hull protein "
                      "subtraction makes this a lower bound")
-    rep.judge_drift("area/lipid drift", halves_drift(apl), 0.5, unit=" A^2", fmt="{:+.2f}",
-                    detail="|drift| <= 0.5 A^2 -- the slowest observable in the system")
+    # Convergence is judged on the GROSS drift, because that is box area alone. The net value
+    # also moves when the protein's convex hull breathes, which is not membrane condensation: on
+    # the first 100 ns leg the net drift read -1.29 A^2 of which only -0.65 was the box, the rest
+    # being +64 A^2 of hull as the receptor relaxed. Judging on the net therefore overstates how
+    # far the membrane still has to go.
+    rep.judge_drift("area/lipid drift (gross)", halves_drift(np.array(apl_g)), 0.5,
+                    unit=" A^2", fmt="{:+.2f}",
+                    detail="|drift| <= 0.5 A^2 -- box area only; the membrane convergence signal")
+    if have_net:
+        rep.add("area/lipid drift (net)", f"{halves_drift(apl):+.2f} A^2", "PASS",
+                "includes the protein hull breathing, so not a membrane convergence signal")
     rep.judge("bilayer thickness (P-P)", float(np.nanmean(thick[-len(thick) // 2:])),
               *THICK_RANGE, unit=" A", soft=True)
 
@@ -488,7 +497,8 @@ def main() -> int:
     # ramp, so its absence means this was an unrestrained run -- and telling someone to go and run
     # the pre-production leg they have just finished is worse than saying nothing.
     ramp = stg_p.exists()
-    drifting = [n for n in ("area/lipid drift", "box Lz drift", "box Lx drift", "density drift")
+    drifting = [n for n in ("area/lipid drift (gross)", "box Lz drift", "box Lx drift",
+                            "density drift")
                 if rep.verdict_of(n) == "WARN"]
     if ramp:
         print("    A short restrained ramp cannot equilibrate a PACKMOL-built bilayer: the lipids")
