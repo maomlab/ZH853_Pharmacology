@@ -1,3 +1,8 @@
+# Editor / REPL scratch
+.Rapp.history
+.Rhistory
+.DS_Store
+
 # Python
 __pycache__/
 *.py[cod]
