@@ -68,17 +68,43 @@ remembering.
 |--------|-------------|----------------|
 | `apo` | receptor only | n/a |
 | `ZH853` | Tyr-cyclo[D-Lys-Trp-Phe-Glu]-Gly-NH2 | **yes** — deposited |
-| `ZH850` | Tyr-cyclo[D-Lys-Trp-Phe-Glu]-NH2 (analog 1) | no |
-| `ZH831` | Tyr-cyclo[D-Glu-Phe-Phe-Lys]-NH2 (analog 2) | no |
-| `ZH809` | Tyr-cyclo[D-Lys-Trp-Phe-Asp]-NH2 (analog 3) | no |
+| `ZH850` | Tyr-cyclo[D-Lys-Trp-Phe-Glu]-NH2 (analog 1) | scaffold transfer |
+| `ZH831` | Tyr-cyclo[D-Glu-Phe-Phe-Lys]-NH2 (analog 2) | scaffold transfer |
+| `ZH809` | Tyr-cyclo[D-Lys-Trp-Phe-Asp]-NH2 (analog 3) | scaffold transfer |
 
-> **The three analogs cannot be built yet: they have SMILES but no 3-D pose.** `chem.ANALOGS`
-> defines them, and `02.04.00_ligand_prep.py` only prepares ZH853 (from the deposited complex).
-> A build refuses up front, naming the two files it needs
-> (`intermediate/02.04.00_ligand/<NAME>_prepared.sdf` and
-> `intermediate/02.05.00_oriented/complex_<NAME>_oriented.pdb`) rather than failing part-way. Drop
-> those in — from docking, or constrained embedding on the common scaffold against the ZH853 pose —
-> and they build with no further change.
+The three analogs have no experimental pose. They inherit ZH853's binding mode by **constrained
+embedding on the common scaffold** (`make prep-analogs` → `src/02.07.00_analog_poses.py`), which
+writes exactly the two files the bundle looks for, in the OPM-oriented frame:
+
+```
+intermediate/02.04.00_ligand/<NAME>_prepared.sdf
+intermediate/02.05.00_oriented/complex_<NAME>_oriented.pdb
+```
+
+The maximum common substructure covers 92–100 % of each analog, so the scaffold is *copied* rather
+than re-derived by distance geometry, and only the few genuinely new atoms are rebuilt and relaxed
+(first with the scaffold frozen, then tethered so residual strain can heal). As generated:
+
+| | scaffold inherited | rebuilt | MMFF vs ZH853 | scaffold drift | closest receptor contact |
+|---|---|---|---|---|---|
+| ZH850 | 55/55 (100 %) | 0 | −78 kcal/mol | 0.10 Å | 2.46 Å |
+| ZH831 | 48/52 (92 %) | 4 | +19 kcal/mol | 0.29 Å | 2.09 Å |
+| ZH809 | 53/54 (98 %) | 1 | −53 kcal/mol | 0.16 Å | 2.52 Å |
+
+ZH831 is the outlier on every column, which is what its chemistry predicts: it reverses the
+macrocycle and swaps Trp→Phe, so it is the least ZH853-like of the three and the one whose pose
+deserves the most scepticism.
+
+> **A caveat worth carrying into the analysis.** These poses assume the analogs bind the way ZH853
+> does. That is a reasonable prior for this degree of similarity, and it is the point of scaffold
+> transfer — but it is an assumption, not a measurement, and MD started from it will not discover a
+> genuinely different binding mode. Treat cross-ligand comparisons as conditional on it.
+
+An MCS match is *topological*: it does not promise that atoms bonded in the analog map onto
+adjacent atoms in ZH853. Where the cycle is traversed differently a valid match can put a bonded
+pair 4.5 Å apart, and inheriting those coordinates hands the force field an impossible geometry —
+ZH831 first came out at 7.5 × 10⁴ kcal/mol. `prune_mapping()` therefore drops any scaffold atom
+whose induced bond lengths are unphysical and rebuilds it instead (one atom each for ZH831/ZH809).
 
 ### How the ligand actually gets into the box (previously it did not)
 

@@ -21,7 +21,8 @@
         lint format typecheck test check \
         fetch \
         qc interactions mutations analogs design interaction-map depictions analysis \
-        prep-assess prep-protonation prep-receptor prep-orient prep-ligand membrane-plot prep \
+        prep-assess prep-protonation prep-receptor prep-orient prep-ligand prep-analogs \
+        membrane-plot prep \
         molstar-render figures manuscript clean-intermediate
 
 help:  ## Show this grouped target list
@@ -100,10 +101,13 @@ prep-orient: prep-receptor  ## Orient receptor to membrane normal (z) for PACKMO
 prep-ligand:  ## Protonated ZH853 + parameterization inputs -> intermediate/
 	python src/02.04.00_ligand_prep.py
 
+prep-analogs: prep-orient prep-ligand  ## ZH850/ZH831/ZH809 poses by scaffold transfer from ZH853
+	python src/02.07.00_analog_poses.py
+
 membrane-plot: prep-orient  ## Membrane-placement determination plot -> manuscript (panel B)
 	python src/02.06.00_membrane_placement.py
 
-prep: prep-assess prep-protonation prep-receptor prep-orient prep-ligand  ## Run the full Phase-2 local prep
+prep: prep-assess prep-protonation prep-receptor prep-orient prep-ligand prep-analogs  ## Run the full Phase-2 local prep
 
 ## Figures & manuscript  [local env; molstar-render also needs Node.js >= 18]
 molstar-render: prep-assess prep-orient  ## Headless MolStar 3D renders -> manuscript (complex, pocket, membrane; needs Node.js)
