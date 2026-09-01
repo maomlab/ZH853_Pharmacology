@@ -326,8 +326,9 @@ def main() -> int:
         rows.append((name, n_core, mol.GetNumAtoms(), frac, n_new, n_heavy, clash))
 
     print()
+    print(f"wrote to {lig_dir.relative_to(paths.ROOT)}/ and {ori_dir.relative_to(paths.ROOT)}/:")
     for name, n_core, n_tot, frac, n_new, n_heavy, clash in rows:
-        print(f"  wrote {name}_prepared.sdf + complex_{name}_oriented.pdb")
+        print(f"  {name}_prepared.sdf + complex_{name}_oriented.pdb")
     if failed:
         print(f"\n{failed} analog(s) failed.", file=sys.stderr)
         return 1
@@ -336,8 +337,15 @@ def main() -> int:
     if bad:
         print(f"\nWARNING: {len(bad)} pose(s) clash with the receptor (< {CLASH_A} A). "
               "Equilibration may not resolve a buried overlap -- inspect before building.")
-    print(f"\nNext: parameterize and build, e.g.")
-    print(f"    ./ligand_resp/run_resp.sh ZH850 && LIGAND=ZH850 ./01_build_system.sh")
+    # Both commands live in the SLURM bundle and are relative to it, not to wherever this was
+    # run from -- `make prep-analogs` runs from the repository root, so an unqualified
+    # "./ligand_resp/run_resp.sh" is a path that does not exist here.
+    bundle = (paths.SRC / "02.10.00_slurm_bundle").relative_to(paths.ROOT)
+    print(f"\nNext, from the SLURM bundle directory ({bundle}), not from here:")
+    print(f"    cd {bundle}")
+    print( "    for L in ZH850 ZH831 ZH809; do ./ligand_resp/run_resp.sh $L; done")
+    print( "    LIGAND=ZH850 D250=ASP ./01_build_system.sh          # one build per ligand x D250")
+    print(f"See {bundle}/README.md for the full 5 x 2 panel and the GPU stages.")
     return 0
 
 

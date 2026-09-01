@@ -36,19 +36,31 @@ Run `make help` for the grouped target list.
 | 0 | Create the environments | `make env` · `make env-cluster` | local · cluster |
 | 1 | Fetch comparator structures | `make fetch` | local |
 | 2 | Static analysis (Objectives 1–3) | `make analysis` | local |
-| 3 | Receptor + ligand preparation (includes step 5) | `make prep` | local |
+| 3 | Receptor, ligand and analog preparation | `make prep` | local |
 | 4 | Copy prep outputs to the cluster | `scp` — see below | → cluster |
-| 5 | Analog poses (ZH850/ZH831/ZH809) | `make prep-analogs` | either — see below |
-| 6 | Ligand force-field parameters | `ligand_resp/run_resp.sh <LIGAND>` | cluster (CPU) |
-| 7 | Build the membrane systems | `LIGAND=… D250=… ./01_build_system.sh` | cluster (CPU) |
-| 8 | Equilibrate → pre-produce → produce | `./submit.sh all` (or `check` / `eq` / `preprod` / `prod`) | cluster (GPU) |
-| 9 | Trajectory QC | `04_analyze.py` | cluster |
+| 5 | Ligand force-field parameters | `ligand_resp/run_resp.sh <LIGAND>` | cluster (CPU) |
+| 6 | Build the membrane systems | `LIGAND=… D250=… ./01_build_system.sh` | cluster (CPU) |
+| 7 | Equilibrate → pre-produce → produce | `./submit.sh all` (or `check` / `eq` / `preprod` / `prod`) | cluster (GPU) |
+| 8 | Trajectory QC | `04_analyze.py` | cluster |
 
-**Steps 6–9 are the SLURM bundle. Follow
+**Steps 5–8 are the SLURM bundle. Follow
 [`src/02.10.00_slurm_bundle/README.md`](src/02.10.00_slurm_bundle/README.md)** — it is the
 authority on cluster settings (`cluster.env`), the CUDA/driver pinning, what each build check
 guards against, how equilibration is judged, and the wall-clock estimates. Everything below is only
 the hand-off into it.
+
+### Step 3 — preparation, and the one part that also runs on the cluster
+
+`make prep` runs the whole Phase-2 chain: component split, protonation states, receptor rebuild,
+OPM orientation, ZH853 preparation, and the analog poses. All of it is local, because the receptor
+rebuild needs `pdbfixer`.
+
+The exception is the last step, `make prep-analogs`, whose only inputs are `complex_oriented.pdb`
+and RDKit — both present in `zh853mor-prep`. So the three analog poses can be regenerated **on the
+cluster** rather than copied, which is the reproducible option. It gives ZH850/ZH831/ZH809 ZH853's
+binding mode by constrained embedding on the common scaffold, and prints the scaffold coverage,
+strain relative to the ZH853 template, and closest receptor contact for each — read those before
+building. The method and its caveats are in the bundle README under *Ligands and the apo system*.
 
 ### Step 4 — what has to cross to the cluster
 
@@ -64,20 +76,10 @@ scp intermediate/02.04.00_ligand/ZH853_prepared.sdf       $CLUSTER:$REPO/interme
 `receptorR_oriented.pdb` is the finalised receptor (ACE/NME caps, named His tautomers, OPM-oriented)
 and `complex_oriented.pdb` additionally carries the deposited ZH853 pose. `01_build_system.sh`
 refuses to build from a stale copy of the first, so a missed sync fails loudly rather than quietly
-producing a differently-protonated system.
+producing a differently-protonated system. Copy the analog files too, or regenerate them there with
+`make prep-analogs`.
 
-### Step 5 — analog poses
-
-`make prep` (step 3) already runs this locally. It is called out separately because it also runs on
-the **cluster** — its only inputs are `complex_oriented.pdb` and RDKit, both of which
-`zh853mor-prep` has, so the poses can be regenerated there rather than copied. It is the one prep
-step that is not local-only: everything upstream of it needs `pdbfixer`.
-
-It gives the three analogs ZH853's binding mode by constrained embedding on the common scaffold,
-and prints the coverage, strain and closest receptor contact for each — read those before building. The method and its caveats are documented in the bundle README
-under *Ligands and the apo system*.
-
-### Steps 6–7 — the panel
+### Steps 5–6 — the panel
 
 Five systems (`apo`, `ZH853`, `ZH850`, `ZH831`, `ZH809`) × two D2.50 protonation states
 (`ASP`, `ASH`) = **10 builds**, each landing in
@@ -85,8 +87,8 @@ Five systems (`apo`, `ZH853`, `ZH850`, `ZH831`, `ZH809`) × two D2.50 protonatio
 
 ```bash
 cd src/02.10.00_slurm_bundle
-for L in ZH853 ZH850 ZH831 ZH809; do ./ligand_resp/run_resp.sh $L; done   # step 6
-for L in apo ZH853 ZH850 ZH831 ZH809; do                                  # step 7
+for L in ZH853 ZH850 ZH831 ZH809; do ./ligand_resp/run_resp.sh $L; done   # step 5
+for L in apo ZH853 ZH850 ZH831 ZH809; do                                  # step 6
   for D in ASP ASH; do LIGAND=$L D250=$D ./01_build_system.sh || echo "FAILED: $L/$D"; done
 done
 ```
