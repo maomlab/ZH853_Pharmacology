@@ -21,6 +21,79 @@ the **μ-opioid receptor (MOR / OPRM1)**, starting from a 3.5 Å cryo-EM structu
 | `OBJECTIVES.md` | Original project brief |
 | `SPECIFICATION.md` | Decisions log + open questions |
 
+## Workflow
+
+Two machines, and the split is deliberate. **Local** carries `openmm` + `pdbfixer` + RDKit for
+structure preparation; the **cluster** carries AmberTools (CPU) and the driver-pinned GPU OpenMM in
+two separate envs, and deliberately does *not* carry `pdbfixer` — so the receptor rebuild and
+membrane orientation are local steps. `intermediate/` is git-ignored, so anything produced on one
+machine must be **copied** to the other; `git pull` will not bring it.
+
+Run `make help` for the grouped target list.
+
+| # | Step | Command | Where |
+|---|------|---------|-------|
+| 0 | Create the environments | `make env` · `make env-cluster` | local · cluster |
+| 1 | Fetch comparator structures | `make fetch` | local |
+| 2 | Static analysis (Objectives 1–3) | `make analysis` | local |
+| 3 | Receptor + ligand preparation (includes step 5) | `make prep` | local |
+| 4 | Copy prep outputs to the cluster | `scp` — see below | → cluster |
+| 5 | Analog poses (ZH850/ZH831/ZH809) | `make prep-analogs` | either — see below |
+| 6 | Ligand force-field parameters | `ligand_resp/run_resp.sh <LIGAND>` | cluster (CPU) |
+| 7 | Build the membrane systems | `LIGAND=… D250=… ./01_build_system.sh` | cluster (CPU) |
+| 8 | Equilibrate → pre-produce → produce | `./submit.sh all` (or `check` / `eq` / `preprod` / `prod`) | cluster (GPU) |
+| 9 | Trajectory QC | `04_analyze.py` | cluster |
+
+**Steps 6–9 are the SLURM bundle. Follow
+[`src/02.10.00_slurm_bundle/README.md`](src/02.10.00_slurm_bundle/README.md)** — it is the
+authority on cluster settings (`cluster.env`), the CUDA/driver pinning, what each build check
+guards against, how equilibration is judged, and the wall-clock estimates. Everything below is only
+the hand-off into it.
+
+### Step 4 — what has to cross to the cluster
+
+`intermediate/` is git-ignored by design (large, regenerable), so these are copied, not pulled:
+
+```bash
+CLUSTER=<user>@<login-node>; REPO=<repo path on the cluster>
+scp intermediate/02.05.00_oriented/receptorR_oriented.pdb \
+    intermediate/02.05.00_oriented/complex_oriented.pdb   $CLUSTER:$REPO/intermediate/02.05.00_oriented/
+scp intermediate/02.04.00_ligand/ZH853_prepared.sdf       $CLUSTER:$REPO/intermediate/02.04.00_ligand/
+```
+
+`receptorR_oriented.pdb` is the finalised receptor (ACE/NME caps, named His tautomers, OPM-oriented)
+and `complex_oriented.pdb` additionally carries the deposited ZH853 pose. `01_build_system.sh`
+refuses to build from a stale copy of the first, so a missed sync fails loudly rather than quietly
+producing a differently-protonated system.
+
+### Step 5 — analog poses
+
+`make prep` (step 3) already runs this locally. It is called out separately because it also runs on
+the **cluster** — its only inputs are `complex_oriented.pdb` and RDKit, both of which
+`zh853mor-prep` has, so the poses can be regenerated there rather than copied. It is the one prep
+step that is not local-only: everything upstream of it needs `pdbfixer`.
+
+It gives the three analogs ZH853's binding mode by constrained embedding on the common scaffold,
+and prints the coverage, strain and closest receptor contact for each — read those before building. The method and its caveats are documented in the bundle README
+under *Ligands and the apo system*.
+
+### Steps 6–7 — the panel
+
+Five systems (`apo`, `ZH853`, `ZH850`, `ZH831`, `ZH809`) × two D2.50 protonation states
+(`ASP`, `ASH`) = **10 builds**, each landing in
+`intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/` as a self-contained run directory:
+
+```bash
+cd src/02.10.00_slurm_bundle
+for L in ZH853 ZH850 ZH831 ZH809; do ./ligand_resp/run_resp.sh $L; done   # step 6
+for L in apo ZH853 ZH850 ZH831 ZH809; do                                  # step 7
+  for D in ASP ASH; do LIGAND=$L D250=$D ./01_build_system.sh || echo "FAILED: $L/$D"; done
+done
+```
+
+Each build takes ~12–15 min of CPU (PACKMOL-Memgen), so take a CPU allocation rather than running
+ten of them on a login node. Then, from each build directory, `./submit.sh all`.
+
 ## Status
 Phases 0–1 and static interaction analysis (Phase 3) complete — see [`docs/PLAN.md`](docs/PLAN.md)
 and [`docs/RESULTS_interactions.md`](docs/RESULTS_interactions.md). Key findings: ZH853 keeps the
@@ -28,9 +101,25 @@ conserved D149 (D3.32) anchor but uniquely engages **E231 (ECL2, salt bridge)** 
 yielding a ranked mutation panel led by **E231Q/E231A** (Objective 2). Reproduce with `make analysis`.
 Analog design (Objective 3) also complete — see [`docs/RESULTS_analog_design.md`](docs/RESULTS_analog_design.md):
 all analogs are beyond-Ro5; two design series proposed (N-methylation for permeability, lipidation for
-half-life). Open items: cluster specs (OQ-3) for MD/prep; MD occupancy validation; Phase 6 free energy.
+half-life).
+
+**Phase 2/4 (MD) in progress.** The SLURM bundle builds and runs all ten systems; cluster settings
+that were OQ-3 now live in one `cluster.env`. The **apo/ASP** arm is furthest along — built,
+equilibrated, and through an unrestrained pre-production leg (measured on the H200 nodes: 94.4 ns/day
+at 2 fs, 587 ns/day at 4 fs, so ~25 h end to end per system). The ligand arms are not yet built.
+Open items: RESP charges still use the AM1-BCC route pending the QM-engine question (the remaining
+`TODO(OQ-3)` in `ligand_resp/run_resp.sh`); MD occupancy validation; Phase 6 free energy.
 
 ## Environment
-Analysis (local, macOS): Python 3.10 + numpy, biotite, rdkit, MDAnalysis (present); add ProLIF, PLIP,
-pdbfixer, mdtraj. Simulation (SLURM cluster): OpenMM, OpenFF, openmmforcefields, PLUMED, OpenFE/BAT2.
-Env specs and a `Makefile` (`make lint typecheck test figures`) land in Phase 0.
+Four conda environments, created from the specs in the repo root:
+
+| Env | Spec | Where | Used by |
+|-----|------|-------|---------|
+| `zh853mor` | `environment.yml` | local | every `make` target here (`make env`) |
+| `zh853mor-prep` | `environment-prep.yml` | cluster | steps 5–7: AmberTools, PACKMOL-Memgen, RDKit |
+| `zh853mor-sim` | `environment-cluster.yml` | cluster | steps 8–9: GPU OpenMM (CUDA pin tracks the driver) |
+| `zh853mor-plumed` | `environment-plumed.yml` | cluster | metadynamics; optional |
+
+`make env` / `make env-cluster` / `make env-plumed` create them. The prep and sim envs are separate
+because their `openmm` pins are mutually incompatible, and `zh853mor-prep` omits `pdbfixer`/`openmm`
+on purpose — see the bundle README for the CUDA/driver pinning, which is the fiddliest part.
