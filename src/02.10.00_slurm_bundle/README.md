@@ -73,7 +73,7 @@ remembering.
 | `ZH809` | Tyr-cyclo[D-Lys-Trp-Phe-Asp]-NH2 (analog 3) | scaffold transfer |
 
 The three analogs have no experimental pose. They inherit ZH853's binding mode by **constrained
-embedding on the common scaffold** (`make prep-analogs` → `src/02.07.00_analog_poses.py`), which
+embedding on the common scaffold** (`make prep-analogs-pose` → `src/02.07.00_analog_poses.py`), which
 writes exactly the two files the bundle looks for, in the OPM-oriented frame:
 
 ```
@@ -142,9 +142,9 @@ They are split because their `openmm` pins are mutually incompatible (`openmm-pl
 newest `openmm` that `openmmforcefields` requires):
 | Env | Spec | Used by | Notes |
 |-----|------|---------|-------|
-| `zh853mor-prep` | `environment-prep.yml` | steps 1–2 | CPU; AmberTools/PACKMOL-Memgen |
-| `zh853mor-sim` | `environment-cluster.yml` | steps 3–5 + FEP | GPU; openmm + openmmforcefields |
-| `zh853mor-plumed` | `environment-plumed.yml` | metadynamics (3.9) | GPU; older openmm + openmm-plumed; optional |
+| `zh853mor-prep` | `environment_zh853mor-prep.yml` | steps 1–2 | CPU; AmberTools/PACKMOL-Memgen |
+| `zh853mor-sim` | `environment_zh853mor-sim.yml` | steps 3–5 + FEP | GPU; openmm + openmmforcefields |
+| `zh853mor-plumed` | `environment_zh853mor-plumed.yml` | metadynamics (3.9) | GPU; older openmm + openmm-plumed; optional |
 
 ## Workflow (run in order)
 
@@ -504,12 +504,12 @@ must be **≤ the driver's ceiling** (the "CUDA Version" in the `nvidia-smi` hea
 see the driver and otherwise grabs the newest toolkit build, whose PTX the driver then refuses to
 JIT — `CUDA_ERROR_UNSUPPORTED_PTX_VERSION (222)`; this bit the H200 nodes (driver ceiling 13.2)
 with an env solved at 13.3 on 2026-08-25, fixed by `cuda-version=13.2` in
-`environment-cluster.yml`. Bump that pin when the cluster driver moves.
+`environment_zh853mor-sim.yml`. Bump that pin when the cluster driver moves.
 Subtler and also hit on 2026-08-25: conda-forge publishes **two openmm builds per python version,
 built against different CUDA toolchains**, and the toolchain baked into the build decides which
 PTX ISA it emits — not the `cuda-nvrtc` installed beside it. The driver accepted PTX ≤ ISA 9.2 and
 rejected 9.3+ (probed via raw `cuModuleLoadData`), so the working build is pinned exactly in
-`environment-cluster.yml`; if CUDA breaks again after a solver upgrade, re-probe the boundary and
+`environment_zh853mor-sim.yml`; if CUDA breaks again after a solver upgrade, re-probe the boundary and
 re-pick the hash. Before the first real
 run, submit the pre-flight **`./submit.sh check`** (step 0.5): it prints the
 modules/`nvidia-smi`/env, runs `openmm.testInstallation`, and does a real 200-step CUDA run,
@@ -521,6 +521,6 @@ ff19SB (protein) + Lipid21 (membrane) + OPC water + GAFF2/RESP ligand; 0.15 M Na
 (CHARMM36m + CHARMM-GUI is the documented alternative — do not mismatch the water model to the FF.)
 
 ## Reproducibility
-Pin exact versions in `environment-cluster.yml` once the cluster CUDA/driver stack is known.
+Pin exact versions in `environment_zh853mor-sim.yml` once the cluster CUDA/driver stack is known.
 Record `openmm.version`, GPU, and CUDA in each run log. Trajectories stay on the cluster; copy back
 QC summaries + representative frames to `product/`.

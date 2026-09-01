@@ -33,7 +33,7 @@ Run `make help` for the grouped target list.
 
 | # | Step | Command | Where |
 |---|------|---------|-------|
-| 0 | Create the environments | `make env` · `make env-cluster` | local · cluster |
+| 0 | Create the environments | `make env-local` · `make env-cluster` | local · cluster |
 | 1 | Fetch comparator structures | `make fetch` | local |
 | 2 | Static analysis (Objectives 1–3) | `make analysis` | local |
 | 3 | Receptor, ligand and analog preparation | `make prep` | local |
@@ -55,7 +55,7 @@ the hand-off into it.
 OPM orientation, ZH853 preparation, and the analog poses. All of it is local, because the receptor
 rebuild needs `pdbfixer`.
 
-The exception is the last step, `make prep-analogs`, whose only inputs are `complex_oriented.pdb`
+The exception is the last step, `make prep-analogs-pose`, whose only inputs are `complex_oriented.pdb`
 and RDKit — both present in `zh853mor-prep`. So the three analog poses can be regenerated **on the
 cluster** rather than copied, which is the reproducible option. It gives ZH850/ZH831/ZH809 ZH853's
 binding mode by constrained embedding on the common scaffold, and prints the scaffold coverage,
@@ -77,7 +77,7 @@ scp intermediate/02.04.00_ligand/ZH853_prepared.sdf       $CLUSTER:$REPO/interme
 and `complex_oriented.pdb` additionally carries the deposited ZH853 pose. `01_build_system.sh`
 refuses to build from a stale copy of the first, so a missed sync fails loudly rather than quietly
 producing a differently-protonated system. Copy the analog files too, or regenerate them there with
-`make prep-analogs`.
+`make prep-analogs-pose`.
 
 ### Steps 5–6 — the panel
 
@@ -117,11 +117,12 @@ Four conda environments, created from the specs in the repo root:
 
 | Env | Spec | Where | Used by |
 |-----|------|-------|---------|
-| `zh853mor` | `environment.yml` | local | every `make` target here (`make env`) |
-| `zh853mor-prep` | `environment-prep.yml` | cluster | steps 5–7: AmberTools, PACKMOL-Memgen, RDKit |
-| `zh853mor-sim` | `environment-cluster.yml` | cluster | steps 8–9: GPU OpenMM (CUDA pin tracks the driver) |
-| `zh853mor-plumed` | `environment-plumed.yml` | cluster | metadynamics; optional |
+| `zh853mor-local` | `environment_zh853mor-local.yml` | local | every `make` target here (`make env-local`) |
+| `zh853mor-prep` | `environment_zh853mor-prep.yml` | cluster | steps 5–7: AmberTools, PACKMOL-Memgen, RDKit |
+| `zh853mor-sim` | `environment_zh853mor-sim.yml` | cluster | steps 8–9: GPU OpenMM (CUDA pin tracks the driver) |
+| `zh853mor-plumed` | `environment_zh853mor-plumed.yml` | cluster | metadynamics; optional |
 
-`make env` / `make env-cluster` / `make env-plumed` create them. The prep and sim envs are separate
+Specs are named `environment_<env name>.yml`. `make env-local` creates the first;
+`make env-cluster` creates all three cluster envs. The prep and sim envs are separate
 because their `openmm` pins are mutually incompatible, and `zh853mor-prep` omits `pdbfixer`/`openmm`
 on purpose — see the bundle README for the CUDA/driver pinning, which is the fiddliest part.

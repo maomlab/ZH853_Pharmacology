@@ -10,7 +10,8 @@ cross-checked three ways and compared to experiment/OPM:
 Best practice is OPM/PPM energy minimization (Lomize 2012, 2022); the cholesterol/aromatic checks
 here confirm the placement is reasonable and set the build slab to ~31-32 A.
 
-Run: python src/02.06.00_membrane_placement.py   (after `make prep-orient`).
+Run: python src/03.04.00_membrane_placement.py   (after `make prep-receptor-orient`),
+or `make membrane-plot`. LOCAL analysis env (zh853mor-local).
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ def aromatic_belt(u) -> tuple[np.ndarray, float, float]:
 
 def main() -> int:
     if not ORIENTED.exists():
-        print(f"ERROR: {ORIENTED} not found -- run `make prep-orient` first.", file=sys.stderr)
+        print(f"ERROR: {ORIENTED} not found -- run `make prep-receptor-orient` first.", file=sys.stderr)
         return 1
     u = structure.load(ORIENTED)
     rec = u.select_atoms("protein and name CA")
@@ -113,7 +114,7 @@ def main() -> int:
 
     fig.tight_layout()
     paths.ensure_dir(paths.PRODUCT)
-    pdf = paths.PRODUCT / f"02.06.00_membrane_placement_{today}.pdf"
+    pdf = paths.PRODUCT / f"03.04.00_membrane_placement_{today}.pdf"
     fig.savefig(pdf)
     fig.savefig(paths.ensure_dir(paths.PRODUCT / "manuscript" / "figures")
                 / "fig_membrane_determination.pdf")

@@ -60,7 +60,7 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   (OPM 4DKL 32.0±1.0 Å; class-A GPCRs 31–35 Å), the value built to. The local `02.05.00` cholesterol-centred
   orientation is a first-pass proxy only (3 site-specific cholesterols fix the midplane to ~2 Å; their ~28 Å
   span ≈ the POPC hydrocarbon core 2Dc=28.8 Å [Kučerka 2011] and is thin). Placement is cross-checked in
-  `02.06.00` against the **Trp/Tyr aromatic girdle** (~30 Å, agrees with OPM) and experiment. Reason: bound
+  `03.04.00` against the **Trp/Tyr aromatic girdle** (~30 Å, agrees with OPM) and experiment. Reason: bound
   cholesterols are a weak, biased ruler; OPM/PPM + the aromatic belt are the recognized methods. (2026-07-25)
 
 - **D-15 (receptor finalisation happens in prep, not assembly):** His tautomers and neutral ACE/NME
@@ -86,7 +86,7 @@ This file records decisions, clarifications, and conventions made as the ZH853�
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which
   software is preinstalled vs must be built (OpenMM, PLUMED, OpenFE, phenix/MolProbity, Gaussian/Psi4 for RESP)?
-  Needed before Phase 2 SLURM bundles; pins versions in `environment-cluster.yml`.
+  Needed before Phase 2 SLURM bundles; pins versions in `environment_zh853mor-sim.yml`.
 - **OQ-5 (analog set for FEP):** Confirm the analog panel for Objective 4 = ZH850, ZH831, ZH809 (from
   OBJECTIVES), plus any Phase-5 designed analogs; the OBJECTIVES analog names/SMILES have internal Trp/Phe
   inconsistencies (same class of typo as D-6) to reconcile — the **SMILES should be treated as authoritative**.

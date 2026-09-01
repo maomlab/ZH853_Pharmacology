@@ -1,7 +1,7 @@
 # Local analysis environment (macOS / no GPU required).
 # Structure QC, interaction fingerprints, cheminformatics, plotting.
-#   conda env create -f environment.yml   (or:  make env)
-name: zh853mor
+#   conda env create -f environment_zh853mor-local.yml   (or:  make env-local)
+name: zh853mor-local
 channels:
   - conda-forge
 dependencies:

@@ -159,7 +159,7 @@ OBJECTIVES; the user runs these manually.
 
 ### Phase 0 — Repo scaffold & environment  *(local, ~0.5 day)*
 - Initialize `src/`, `intermediate/`, `product/`, `docs/` with the numbering scheme; `Makefile`;
-  `environment.yml` (analysis) and `environment-cluster.yml` (OpenMM/OpenFF/PLUMED); pre-commit
+  `environment_zh853mor-local.yml` (analysis) and `environment_zh853mor-sim.yml` (OpenMM/OpenFF/PLUMED); pre-commit
   (ruff+mypy); `README.md`.
 - **Gate:** `make lint typecheck` green on a trivial module.
 
@@ -266,7 +266,7 @@ Treat as **rank-ordering**, not absolute affinities, unless convergence is demon
 | D2.50 / pocket protonation ambiguity | Medium | Parallel protonation-state systems; constant-pH as fallback |
 | Relative FEP ring-size edits (Glu↔Asp) unmappable | Medium | Kartograf 3D mapping; ATM/SepTop; restrict network to R-group-like edits where possible |
 | ABFE Boresch anchors ill-defined for floppy macrocycle | Medium | ATM / enhanced-sampling ABFE; careful anchor selection + standard-state correction checks |
-| Cluster env drift / reproducibility | Low | Pinned `environment-cluster.yml`; self-contained bundles; logged software versions |
+| Cluster env drift / reproducibility | Low | Pinned `environment_zh853mor-sim.yml`; self-contained bundles; logged software versions |
 
 ## 6. Considered but deferred
 - **FEP+ (Schrödinger)** has the only mature macrocycle machinery (ring open/close moves) but is

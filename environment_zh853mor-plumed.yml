@@ -2,7 +2,7 @@
 # Isolated because openmm-plumed does not yet support openmm 8.5, so it pins an older openmm
 # that is incompatible with openmmforcefields>=0.16 in the main run env. Only needed for the
 # metadynamics runs; equilibration/production/FEP use zh853mor-sim.
-#   conda env create -f environment-plumed.yml
+#   conda env create -f environment_zh853mor-plumed.yml
 name: zh853mor-plumed
 channels:
   - conda-forge

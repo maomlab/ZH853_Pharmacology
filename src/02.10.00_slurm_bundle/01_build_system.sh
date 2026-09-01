@@ -52,7 +52,7 @@ echo "Building in $BUILD (ligand = $LIGAND, D2.50 = $D250)"
 
 # --- stage inputs -------------------------------------------------------------------------
 # Receptor: use the membrane-ORIENTED file (normal along z) so --preoriented is valid.
-# Produced by `make prep-orient` (src/02.05.00_orient_receptor.py); already carries the ACE/NME
+# Produced by `make prep-receptor-orient` (src/02.05.00_orient_receptor.py); already carries the ACE/NME
 # caps and the named His tautomers from 02.03.00, so no downstream default can override them.
 # The D2.50 variant is a pure residue rename -- same geometry, so it is applied here rather than
 # by duplicating the whole prep/orient chain (D-11).
@@ -108,7 +108,7 @@ if [ -n "$missing" ]; then
   echo "  $REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb predates D-15 (ACE/NME caps"
   echo "  and named His tautomers). It is gitignored, so a git pull does not update it."
   echo "  Regenerate it in the LOCAL analysis env (needs openmm + pdbfixer):"
-  echo "      make prep-receptor prep-orient"
+  echo "      make prep-receptor-rebuild prep-receptor-orient"
   echo "  then copy intermediate/02.05.00_oriented/receptorR_oriented.pdb to this machine."
   exit 1
 fi

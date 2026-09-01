@@ -12,10 +12,10 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 # Faster solves if available (classic conda is slow); harmless if already present.
 conda install -n base -y -c conda-forge mamba >/dev/null 2>&1 || true
 
-conda env create -f "$REPO/environment-prep.yml"    || conda env update -f "$REPO/environment-prep.yml"
-conda env create -f "$REPO/environment-cluster.yml"  || conda env update -f "$REPO/environment-cluster.yml"
+conda env create -f "$REPO/environment_zh853mor-prep.yml"    || conda env update -f "$REPO/environment_zh853mor-prep.yml"
+conda env create -f "$REPO/environment_zh853mor-sim.yml"  || conda env update -f "$REPO/environment_zh853mor-sim.yml"
 # Metadynamics only -- uncomment when you reach Methods 3.9:
-# conda env create -f "$REPO/environment-plumed.yml" || conda env update -f "$REPO/environment-plumed.yml"
+# conda env create -f "$REPO/environment_zh853mor-plumed.yml" || conda env update -f "$REPO/environment_zh853mor-plumed.yml"
 
 # Verify the GPU run env sees CUDA. NOTE: run this on a GPU node (srun --gres=gpu:1 ... --pty bash)
 # -- on a login node only CPU/Reference platforms appear.

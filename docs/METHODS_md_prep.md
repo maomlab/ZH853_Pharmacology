@@ -44,7 +44,7 @@ cross-check.
   (community standard; hydrophobic thickness **~32 Å for MOR**, OPM 4DKL 32.0±1.0 Å; class-A GPCRs
   31–35 Å). The local `02.05.00` cholesterol-centred orientation is a quick first-pass proxy only —
   3 site-specific cholesterols fix the midplane to ~2 Å and their ~28 Å span (≈ POPC hydrocarbon core
-  2Dc=28.8 Å, Kučerka 2011) is thin. `02.06.00` validates the placement against the **Trp/Tyr aromatic
+  2Dc=28.8 Å, Kučerka 2011) is thin. `03.04.00` validates the placement against the **Trp/Tyr aromatic
   girdle** (~30 Å, agrees with OPM) and experiment; build to the ~31–32 Å OPM slab (P-P ~37–40 Å).
 - **Membrane build:** PACKMOL-Memgen, POPC:cholesterol 9:1 (D-4), 0.15 M NaCl, OPC water, ≥15 Å pad,
   extra intracellular Z for the Gi domain; tleap assembly with **ff19SB + Lipid21 + OPC + GAFF2/RESP
@@ -64,4 +64,4 @@ cross-check.
 ## Open items (cluster-dependent — OQ-3)
 GPU type / partition / wall-time / account and QM engine (Psi4 vs Gaussian for RESP) are marked
 `TODO(OQ-3)` in the sbatch and RESP scripts; fill from the cluster specs and pin
-`environment-cluster.yml` before submission.
+`environment_zh853mor-sim.yml` before submission.

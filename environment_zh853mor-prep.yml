@@ -2,7 +2,7 @@
 # Runs 01_build_system.sh (PACKMOL-Memgen + tleap) and ligand_resp/ (antechamber/RESP).
 # Kept separate from the GPU run env because AmberTools is a large CPU toolkit with its own
 # version constraints; no GPU/openmm needed here.
-#   conda env create -f environment-prep.yml
+#   conda env create -f environment_zh853mor-prep.yml
 name: zh853mor-prep
 channels:
   - conda-forge

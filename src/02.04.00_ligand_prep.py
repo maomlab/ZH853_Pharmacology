@@ -6,7 +6,7 @@ SMILES, protonates to the physiological +1 state (the Tyr1 alpha-amine that salt
 D149), adds hydrogens on the 3D pose, and writes an SDF ready for antechamber/OpenFF. Also
 emits the parameterization commands for both routes (GAFF2/AM1-BCC quick; RESP rigorous).
 
-Run: ``python src/02.04.00_ligand_prep.py``  (or ``make prep-ligand``).
+Run: ``python src/02.04.00_ligand_prep.py``  (or ``make prep-ZH853-protonate``).
 """
 
 from __future__ import annotations

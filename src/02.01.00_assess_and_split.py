@@ -4,7 +4,7 @@
 Reports missing atoms, chain termini, His tautomer sites, the Na+ pocket, and disulfides;
 writes per-component PDBs (receptor+ligand, Gi, scFv16) to intermediate/ for downstream prep.
 
-Run: ``python src/02.01.00_assess_and_split.py``  (or ``make prep-assess``).
+Run: ``python src/02.01.00_assess_and_split.py``  (or ``make prep-complex-split``).
 """
 
 from __future__ import annotations

@@ -139,7 +139,7 @@ def graft(name: str, repo: Path, out: Path) -> int:
               f"(max CA displacement {worst:.3f} A over {len(shared)} residues, "
               f"tolerance {GRAFT_TOL_A} A).", file=sys.stderr)
         print("  The ligand pose cannot be transferred onto this receptor. Re-run the orientation", file=sys.stderr)
-        print("  chain so both come from the same superposition:  make prep-receptor prep-orient", file=sys.stderr)
+        print("  chain so both come from the same superposition:  make prep-receptor-rebuild prep-receptor-orient", file=sys.stderr)
         return 1
 
     resn = get(name)["input_resname"]

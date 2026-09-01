@@ -1,5 +1,5 @@
 # GPU run environment (Linux + CUDA): equilibration, production, free energy.
-#   conda env create -f environment-cluster.yml     (or: bash src/02.10.00_slurm_bundle/00_install.sh)
+#   conda env create -f environment_zh853mor-sim.yml     (or: bash src/02.10.00_slurm_bundle/00_install.sh)
 #
 # Python is intentionally UNPINNED so conda selects a version consistent with the latest
 # openmm; openmmforcefields>=0.16 pulls openmm>=8.5.1, which needs CUDA>=13.
@@ -8,9 +8,9 @@
 # against 13.3 on the 13.2-ceiling H200 nodes fails with CUDA_ERROR_UNSUPPORTED_PTX_VERSION
 # (222) at kernel JIT -- OpenMM bundles its own CUDA runtime, so `module load` cannot fix it,
 # only re-pinning the env can (2026-08-25 incident). Bump the pin when the driver moves.
-# openmm-plumed is deliberately NOT here (see environment-plumed.yml):
+# openmm-plumed is deliberately NOT here (see environment_zh853mor-plumed.yml):
 # it does not yet support openmm 8.5, and coupling it to openmmforcefields is unsatisfiable.
-# AmberTools is likewise split out to environment-prep.yml (it is a CPU build/prep tool).
+# AmberTools is likewise split out to environment_zh853mor-prep.yml (it is a CPU build/prep tool).
 name: zh853mor-sim
 channels:
   - conda-forge

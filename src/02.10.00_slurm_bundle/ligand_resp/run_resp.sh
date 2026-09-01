@@ -31,7 +31,7 @@ SDF="$REPO/$(python "$BUNDLE/ligands.py" --field sdf --ligand "$LIGAND")"
 CHG="$(python "$BUNDLE/ligands.py" --field net_charge --ligand "$LIGAND")"
 if [ ! -f "$SDF" ]; then
   echo "ERROR: prepared SDF not found: $SDF" >&2
-  echo "  Generate it in the LOCAL analysis env first (needs RDKit):  make prep-ligand" >&2
+  echo "  Generate it in the LOCAL analysis env first (needs RDKit):  make prep-ZH853-protonate" >&2
   exit 1
 fi
 

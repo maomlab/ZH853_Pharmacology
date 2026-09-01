@@ -9,7 +9,7 @@ the transform to the whole complex. PACKMOL-Memgen `--preoriented` is then valid
 thickness comes from OPM, not the bound cholesterols.
 
 If the OPM reference cannot be fetched (offline), falls back to a principal-axis + cholesterol-midplane
-proxy (clearly weaker; see docs/METHODS_md_prep.md and SPECIFICATION D-14). Either way, 02.06.00
+proxy (clearly weaker; see docs/METHODS_md_prep.md and SPECIFICATION D-14). Either way, 03.04.00
 validates the placement against the Trp/Tyr aromatic girdle and experimental POPC thickness.
 
 Run (local analysis env): python src/02.05.00_orient_receptor.py
@@ -141,7 +141,7 @@ def main() -> int:
     caz = u.select_atoms("segid R and name CA").positions[:, 2]
     print(f"Oriented by {method}")
     print(f"Membrane normal -> z, midplane at z=0; receptor Ca z-extent {np.ptp(caz):.1f} A")
-    print("Validate the thickness with `make membrane-plot` (02.06.00). For a definitive per-structure")
+    print("Validate the thickness with `make membrane-plot` (03.04.00). For a definitive per-structure")
     print("value, submit this model to the PPM 3.0 server (opm.phar.umich.edu/ppm_server).")
     return 0
 

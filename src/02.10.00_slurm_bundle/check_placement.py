@@ -41,7 +41,7 @@ AA = {
 }
 TRP_RING = {"CG", "CD1", "NE1", "CE2", "CD2", "CE3", "CZ2", "CZ3", "CH2"}
 TYR_RING = {"CG", "CD1", "CD2", "CE1", "CE2", "CZ", "OH"}
-OPM_HALF = 15.7  # OPM 6DDF DUM boundary -> 31.4 A hydrophobic thickness (cf. 02.06.00)
+OPM_HALF = 15.7  # OPM 6DDF DUM boundary -> 31.4 A hydrophobic thickness (cf. 03.04.00)
 
 
 def read_pdb(path):
