@@ -30,10 +30,23 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--top", required=True)
     ap.add_argument("--traj", required=True)
-    ap.add_argument("--lig", default="LIG")
+    ap.add_argument("--lig", default=None,
+                    help="ligand resname; defaults to system.json's, else LIG. 'apo' (or a "
+                         "resname matching nothing) skips the ligand metrics")
     ap.add_argument("--receptor", default="segid R")
     ap.add_argument("--out", default="qc")
     args = ap.parse_args()
+
+    # The build records what it is in system.json, so the panel of 5 systems can be analysed with
+    # one command line rather than remembering which directory is apo.
+    if args.lig is None:
+        try:
+            with open("system.json") as fh:
+                meta = json.load(fh)
+            args.lig = meta.get("ligand_resname") or "apo"
+            print(f"system.json: ligand={meta.get('ligand')} -> --lig {args.lig}")
+        except (OSError, ValueError):
+            args.lig = "LIG"
 
     u = mda.Universe(args.top, args.traj)
     ref = mda.Universe(args.top, args.traj)
@@ -48,28 +61,38 @@ def main() -> None:
     ca = u.select_atoms(f"{args.receptor} and name CA")
     rmsf = rms.RMSF(ca).run().results.rmsf
 
-    lig = u.select_atoms(f"resname {args.lig}")
-    lig_ref = lig.positions.copy()
+    # An apo build has no ligand: ligand RMSD and contact occupancy are undefined, and an empty
+    # selection would otherwise raise deep inside the frame loop after minutes of trajectory I/O.
+    lig = u.select_atoms("") if args.lig.lower() == "apo" else u.select_atoms(f"resname {args.lig}")
+    has_ligand = len(lig) > 0
+    if not has_ligand and args.lig.lower() != "apo":
+        print(f"WARNING: no atoms match 'resname {args.lig}' -- treating this as an apo system. "
+              "Check system.json if that is not what you built.")
+    lig_ref = lig.positions.copy() if has_ligand else None
     lig_rmsd = []
     contact_hits = {r: 0 for r in KEY_CONTACTS}
     nframes = 0
     for _ in u.trajectory:
-        lig_rmsd.append(float(np.sqrt(((lig.positions - lig_ref) ** 2).sum(axis=1).mean())))
-        for r in KEY_CONTACTS:
-            res = u.select_atoms(f"{args.receptor} and resid {r}")
-            if len(res) and (np.linalg.norm(
-                res.positions[:, None] - lig.positions[None], axis=2
-            ).min() <= 4.5):
-                contact_hits[r] += 1
+        if has_ligand:
+            lig_rmsd.append(float(np.sqrt(((lig.positions - lig_ref) ** 2).sum(axis=1).mean())))
+            for r in KEY_CONTACTS:
+                res = u.select_atoms(f"{args.receptor} and resid {r}")
+                if len(res) and (np.linalg.norm(
+                    res.positions[:, None] - lig.positions[None], axis=2
+                ).min() <= 4.5):
+                    contact_hits[r] += 1
         nframes += 1
 
     summary = {
-        "n_frames": nframes,
+        "n_frames": nframes, "ligand": args.lig if has_ligand else "apo",
         "bb_rmsd_mean": float(bb_rmsd.mean()), "bb_rmsd_last": float(bb_rmsd[-1]),
         "rmsf_max": float(rmsf.max()),
-        "ligand_rmsd_mean": float(np.mean(lig_rmsd)), "ligand_rmsd_last": lig_rmsd[-1],
-        "contact_occupancy": {str(r): contact_hits[r] / max(nframes, 1) for r in KEY_CONTACTS},
     }
+    if has_ligand:
+        summary.update({
+            "ligand_rmsd_mean": float(np.mean(lig_rmsd)), "ligand_rmsd_last": lig_rmsd[-1],
+            "contact_occupancy": {str(r): contact_hits[r] / max(nframes, 1) for r in KEY_CONTACTS},
+        })
     with open(f"{args.out}.json", "w") as fh:
         json.dump(summary, fh, indent=2)
 
@@ -77,11 +100,13 @@ def main() -> None:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1, 3, figsize=(13, 4))
+        n_panels = 3 if has_ligand else 2
+        fig, ax = plt.subplots(1, n_panels, figsize=(4.4 * n_panels, 4))
         ax[0].plot(bb_rmsd); ax[0].set_title("backbone RMSD (A)"); ax[0].set_xlabel("frame")
         ax[1].plot(ca.resids, rmsf); ax[1].set_title("RMSF (A)"); ax[1].set_xlabel("residue")
-        ax[2].plot(lig_rmsd); ax[2].set_title("ligand RMSD (A, receptor-aligned)")
-        ax[2].set_xlabel("frame")
+        if has_ligand:
+            ax[2].plot(lig_rmsd); ax[2].set_title("ligand RMSD (A, receptor-aligned)")
+            ax[2].set_xlabel("frame")
         fig.tight_layout(); fig.savefig(f"{args.out}.png", dpi=150)
     except ImportError:
         pass

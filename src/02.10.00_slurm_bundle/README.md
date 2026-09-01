@@ -44,16 +44,72 @@ every timestamped build directory.
   α5-helix retained) to hold the active state. For Objective 4 throughput.
 - Each built **twice**: D2.50 (Asp116) charged vs protonated (ASH).
 
-> **OPEN — the build is currently apo, and neither System A nor System B.** `01_build_system.sh`
-> stages `receptorR_oriented.pdb`, which is the **receptor alone**: no ZH853 and no Gi. `tleap.in`
-> does `LIG = loadmol2 ZH853.mol2` but never combines `LIG` into `sys`, so that unit is dropped and
-> `saveamberparm` writes a ligand-free system — silently, since loading parameters for an absent
-> residue is not an error. `make_tleap.py` now warns when no ligand residue is present in the packed
-> box. Fixing this is a build-design decision, not a one-line edit: the ligand (and Gi, for System A)
-> must be packed *with* the protein, so `02.05.00` needs to emit a complex whose ligand residue name
-> matches `ZH853.mol2`, and PACKMOL-Memgen's `reduce` preprocessing has to be kept from mangling the
-> HETATM records. `intermediate/02.05.00_oriented/complex_oriented.pdb` (receptor + ligand, same
-> OPM transform) is the natural starting point. Decide this before spending GPU time.
+## Ligands and the apo system
+
+The bundle builds **five systems** — the apo receptor and each of the four ZH cyclic peptides —
+orthogonally to the D2.50 variant, so the full panel is 5 × 2 = 10 builds:
+
+```bash
+LIGAND=ZH853 ./01_build_system.sh              # default
+LIGAND=apo   ./01_build_system.sh              # receptor only
+LIGAND=ZH853 D250=ASH ./01_build_system.sh     # protonated D2.50 (D-11/D-17)
+
+for L in apo ZH853 ZH850 ZH831 ZH809; do
+  for D in ASP ASH; do LIGAND=$L D250=$D ./01_build_system.sh; done
+done
+```
+
+`ligands.py` is the registry (`python ligands.py --describe`). Builds land in
+`intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/` and each records what it is in
+`system.json`, which `04_analyze.py` and `check_equilibration.py` read so `--lig` needs no
+remembering.
+
+| System | Description | Pose available |
+|--------|-------------|----------------|
+| `apo` | receptor only | n/a |
+| `ZH853` | Tyr-cyclo[D-Lys-Trp-Phe-Glu]-Gly-NH2 | **yes** — deposited |
+| `ZH850` | Tyr-cyclo[D-Lys-Trp-Phe-Glu]-NH2 (analog 1) | no |
+| `ZH831` | Tyr-cyclo[D-Glu-Phe-Phe-Lys]-NH2 (analog 2) | no |
+| `ZH809` | Tyr-cyclo[D-Lys-Trp-Phe-Asp]-NH2 (analog 3) | no |
+
+> **The three analogs cannot be built yet: they have SMILES but no 3-D pose.** `chem.ANALOGS`
+> defines them, and `02.04.00_ligand_prep.py` only prepares ZH853 (from the deposited complex).
+> A build refuses up front, naming the two files it needs
+> (`intermediate/02.04.00_ligand/<NAME>_prepared.sdf` and
+> `intermediate/02.05.00_oriented/complex_<NAME>_oriented.pdb`) rather than failing part-way. Drop
+> those in — from docking, or constrained embedding on the common scaffold against the ZH853 pose —
+> and they build with no further change.
+
+### How the ligand actually gets into the box (previously it did not)
+
+`tleap.in` loads the ligand parameters, but `loadmol2` alone never put the ligand **in the system**:
+PACKMOL packed the receptor-only PDB, so `saveamberparm` wrote a ligand-free box — silently, since
+parameters for an absent residue are not an error. Every build before this change was apo whatever
+it was called. Three things were needed, and each is checked rather than assumed:
+
+- **The ligand is packed with the receptor.** `ligands.py --graft` writes the staged
+  `receptor.pdb`. It does *not* use `complex_oriented.pdb` wholesale: that file was written from
+  the raw deposited complex and still has bare `HIS` and **no ACE/NME caps**, so building from it
+  would rebuild the system with charged termini and default tautomers — the staleness guard in
+  `01_build_system.sh` catches exactly that. Instead the ligand is grafted onto the *finalised*
+  receptor. Both carry the same OPM transform (measured: max CA displacement **0.000 Å** over 281
+  residues), and `--graft` re-verifies that to 0.10 Å every build before transferring the pose, so
+  regenerating one file and not the other cannot silently misplace the ligand.
+- **`fix_ligand.py` reconciles the names.** `loadpdb` matches atoms to a unit template *by name*,
+  and two mismatches are guaranteed: the deposited pose calls the ligand `L01` while antechamber
+  runs with `-rn LIG`, and SDF carries no atom names so antechamber *generates* them (`C1, C2 …`)
+  rather than keeping `C20/C30/…`. It maps positionally — heavy-atom order survives from the
+  deposited molecule through RDKit `AddHs` into the SDF — **verifies the element sequence**, and
+  aborts rather than renaming atoms onto the wrong templates, which would parameterize the ligand
+  as a differently-connected molecule. Hydrogens are not needed in the PDB; tleap rebuilds them.
+- **`make_tleap.py --ligand` fills `@LIGAND_PARAMS@`** with the `loadmol2`/`loadamberparams` pair,
+  or a comment for apo. A ligand that is expected but absent is now an **error**: the historical
+  failure was building apo while believing otherwise, and a warning in a long log is how that went
+  unnoticed.
+
+Parameterize each ligand first — `./ligand_resp/run_resp.sh ZH853` — which writes
+`ligand_resp/<LIGAND>/<LIGAND>.{mol2,frcmod}` (per-ligand subdirectories because antechamber's
+fixed-name scratch files would otherwise collide).
 
 ## Conda environments (three, task-specific)
 They are split because their `openmm` pins are mutually incompatible (`openmm-plumed` lags the
@@ -75,8 +131,9 @@ you `cd` into and submit from. Nothing in steps 3–5 is invoked out of `src/`.
 |------|--------|-----|-------|----------|
 | 0 | `00_install.sh` | — | login node (builds the envs) | `src/02.10.00_slurm_bundle/` |
 | 0.5 | `./submit.sh check` → `check_gpu_env.sh` | `zh853mor-sim` | **GPU (pre-flight)** | either |
-| 1 | `ligand_resp/run_resp.sh` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
-| 2 | `01_build_system.sh` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
+| 1 | `ligand_resp/run_resp.sh <LIGAND>` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
+| 2 | `LIGAND=<name> ./01_build_system.sh` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
+| 2e | `ligands.py --graft` / `fix_ligand.py` | `zh853mor-prep` | CPU (called by step 2) | — |
 | 2a | `check_placement.py` | `zh853mor-prep` | CPU (called by step 2) | — |
 | 2b | `check_piercing.py` | `zh853mor-prep` | CPU (called by step 2) | — |
 | 2c | `fix_caps.py` | `zh853mor-prep` | CPU (called by step 2) | — |

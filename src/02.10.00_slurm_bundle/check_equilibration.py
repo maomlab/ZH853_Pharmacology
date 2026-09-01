@@ -44,6 +44,7 @@ CA_RMSD_MAX = 3.0              # A, whole receptor vs the staged (OPM-oriented) 
 TM_RMSD_MAX = 2.0              # A, membrane-embedded CA only -- the number that should be tight
 REGISTRATION_DRIFT_A = 2.0     # A of vertical drift out of the OPM slab over the run
 SG_RANGE = (1.90, 2.30)        # A, C142-C219 disulfide
+LIG_RMSD_MAX = 3.0             # A, receptor-aligned ligand drift over the ramp
 CORE_HALF_A = 8.0              # |z - midplane| defining the hydrophobic core
 TM_HALF_A = 15.0               # |z - midplane| defining the membrane-embedded CA set
 
@@ -145,8 +146,16 @@ def main() -> int:
                     help="equilibration output basename (.log/.dcd/_stages.json/.pdb)")
     ap.add_argument("--receptor", default="receptor.pdb", help="staged OPM-oriented receptor")
     ap.add_argument("--out", default="eq_qc")
+    ap.add_argument("--lig", default=None,
+                    help="ligand resname; defaults to system.json's. Skipped for an apo build")
     ap.add_argument("--skip-piercing", action="store_true")
     args = ap.parse_args()
+
+    if args.lig is None:
+        try:
+            args.lig = json.loads(Path("system.json").read_text()).get("ligand_resname") or "apo"
+        except (OSError, ValueError):
+            args.lig = "LIG"
 
     eq = Path(args.eq)
     log_p, dcd_p, stg_p = Path(f"{eq}.log"), Path(f"{eq}.dcd"), Path(f"{eq}_stages.json")
@@ -206,6 +215,7 @@ def main() -> int:
     prot = u.select_atoms("protein") if len(u.select_atoms("protein")) else ca
     wat_o = u.select_atoms(f"resname {' '.join(WATER_RESN)} and name O OW O1")
     sg = u.select_atoms("name SG")
+    lig = u.select_atoms("") if args.lig.lower() == "apo" else u.select_atoms(f"resname {args.lig}")
 
     if not len(phos):
         print("ERROR: no POPC phosphorus atoms found; is this a bilayer?", file=sys.stderr)
@@ -218,6 +228,7 @@ def main() -> int:
                 "cannot compute RMSD against the staged receptor")
 
     box, apl_g, apl_n, thick, rmsd_all, rmsd_tm, reg, sgd = ([] for _ in range(8))
+    lig_rmsd, lig_ref = [], []
     tm_mask = None
     n_up, n_lo = leaflet_counts(u, float(phos.positions[:, 2].mean()))
     per_leaflet = max((n_up + n_lo) / 2.0, 1.0)
@@ -245,6 +256,15 @@ def main() -> int:
         if len(sg) >= 2:
             d = np.linalg.norm(sg.positions[0] - sg.positions[1])
             sgd.append(float(d) if len(sg) == 2 else np.nan)
+        if len(lig):
+            if not lig_ref:
+                lig_ref.append(lig.positions.copy())
+            # Receptor-aligned: the restraint ramp holds the protein, so drift here is the ligand
+            # leaving the pocket rather than the whole system translating.
+            lig_rmsd.append(float(np.sqrt(
+                ((lig.positions - cap[tm_mask].mean(axis=0)
+                  - (lig_ref[0] - ref_ca[tm_mask].mean(axis=0))) ** 2).sum(axis=1).mean()))
+                if ca_ok else float(np.sqrt(((lig.positions - lig_ref[0]) ** 2).sum(axis=1).mean())))
 
     box = np.array(box)
     rep.judge("box Lx drift", abs(halves_drift(box[:, 0])), 0.0, BOX_DRIFT_A,
@@ -285,6 +305,12 @@ def main() -> int:
     # that has relaxed. So measure the drift directly, against this run's own first frame.
     rep.judge("OPM registration drift", abs(reg[-1] - reg[0]), 0.0, REGISTRATION_DRIFT_A,
               unit=" A", detail=f"vertical shift vs frame 0 (now {reg[-1]:+.2f} A off the midplane)")
+    if len(lig):
+        rep.judge(f"ligand RMSD ({args.lig})", lig_rmsd[-1], 0.0, LIG_RMSD_MAX, unit=" A",
+                  detail=f"<= {LIG_RMSD_MAX} A; the ligand should stay in the pocket")
+    elif args.lig.lower() != "apo":
+        rep.add(f"ligand ({args.lig})", "absent", "FAIL",
+                "system.json expects a ligand but the topology has none -- an apo build")
     if len(sg) == 2:
         rep.judge("disulfide SG-SG", sgd[-1], *SG_RANGE, unit=" A")
     else:

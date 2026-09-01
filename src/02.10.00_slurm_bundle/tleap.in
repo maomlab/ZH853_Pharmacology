@@ -15,9 +15,11 @@ source leaprc.lipid21
 source leaprc.water.opc
 source leaprc.gaff2
 
-# ZH853 ligand parameters (from ligand_resp/)
-LIG = loadmol2 ZH853.mol2
-loadamberparams ZH853.frcmod
+#   @LIGAND_PARAMS@ -- the loadmol2/loadamberparams pair for whichever ligand is being built,
+#                      or a comment for an apo build. The unit MUST be named LIG: loadpdb matches
+#                      the packed residue to a unit BY NAME, and fix_ligand.py renames the packed
+#                      ligand (deposited name L01) to LIG for exactly that reason.
+@LIGAND_PARAMS@
 
 # assembled, pre-packed, pre-solvated system from PACKMOL-Memgen, with disulfide cysteines
 # renamed CYS -> CYX by make_tleap.py so ff19SB does not add an HG to a bonded sulfur.

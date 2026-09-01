@@ -257,11 +257,33 @@ def diagnose_box(build: Path) -> int:
     return 0
 
 
+class _Args:
+    ligand = "ZH853"
+
+
 def main() -> int:
-    args = [a for a in sys.argv[1:] if a != "--diagnose"]
-    if "--diagnose" in sys.argv[1:]:
-        return diagnose_box(Path(args[0]) if args else Path("bilayer_system.pdb"))
-    build = Path(args[0]) if args else Path("bilayer_system.pdb")
+    argv = sys.argv[1:]
+    args = _Args()
+    # Minimal hand-rolled parsing to match the existing --diagnose convention (no argparse here).
+    rest = []
+    it = iter(range(len(argv)))
+    skip = -1
+    for k, a in enumerate(argv):
+        if k == skip:
+            continue
+        if a == "--ligand":
+            if k + 1 >= len(argv):
+                print("ERROR: --ligand needs a value (apo or a ligand name).", file=sys.stderr)
+                return 1
+            args.ligand = argv[k + 1]
+            skip = k + 1
+        elif a.startswith("--ligand="):
+            args.ligand = a.split("=", 1)[1]
+        elif a != "--diagnose":
+            rest.append(a)
+    if "--diagnose" in argv:
+        return diagnose_box(Path(rest[0]) if rest else Path("bilayer_system.pdb"))
+    build = Path(rest[0]) if rest else Path("bilayer_system.pdb")
     template = Path("tleap.in")
     if not build.exists() or not template.exists():
         print(f"ERROR: need both {build} and {template} in the current directory.", file=sys.stderr)
@@ -329,17 +351,53 @@ def main() -> int:
         print(f"box {d[0]:.2f} x {d[1]:.2f} x {d[2]:.2f} A (from packed coordinates); {msg}")
         dims = d
 
-    if not any(rn in LIGAND_RESNAMES for _, rn, _ in residues):
-        print()
-        print("WARNING: no ZH853 ligand residue found in the packed system. 01_build_system.sh")
-        print("  stages the receptor-only PDB, so packmol-memgen packed an APO receptor and")
-        print("  loadmol2 alone will not put the ligand in the box. This will build System B-apo,")
-        print("  not System A. See README 'Systems to build'.")
+    # A ligand that is expected but absent is now an ERROR, not a warning: the historical failure
+    # was building an apo system while believing it held ZH853, and a warning in a long build log
+    # is exactly how that went unnoticed. `--ligand apo` states the intent explicitly instead.
+    found_ligand = any(rn in LIGAND_RESNAMES for _, rn, _ in residues)
+    if args.ligand == "apo":
+        if found_ligand:
+            print("\nERROR: --ligand apo, but a ligand residue is present in the packed system.",
+                  file=sys.stderr)
+            return 1
+        ligand_params = "# apo build: no ligand parameters"
+    else:
+        if not found_ligand:
+            print(f"\nERROR: --ligand {args.ligand} but no ligand residue is in the packed system.",
+                  file=sys.stderr)
+            print("  loadmol2 alone does not put a ligand in the box -- it must be PACKED with the",
+                  file=sys.stderr)
+            print("  receptor. Check that 01_build_system.sh staged the oriented COMPLEX, and that",
+                  file=sys.stderr)
+            print("  fix_ligand.py ran and reported the expected heavy-atom count.", file=sys.stderr)
+            return 1
+        ligand_params = (f"LIG = loadmol2 {args.ligand}.mol2\n"
+                         f"loadamberparams {args.ligand}.frcmod")
 
-    text = (template.read_text()
-            .replace("@SYSTEM_PDB@", out_pdb.name)
-            .replace("@DISULFIDES@", bonds)
-            .replace("@SETBOX@", f"set sys box {{ {dims[0]:.3f} {dims[1]:.3f} {dims[2]:.3f} }}"))
+    # Substitute BLOCK placeholders only where they stand alone on a line. tleap.in documents each
+    # one in a header comment using its own literal token, and a blind str.replace fires there too:
+    # a multi-line value then has its 2nd line escape the `#` and become a real tleap command.
+    # Latent with one disulfide (the value is one line); certain with the two-line ligand block.
+    blocks = {
+        "@DISULFIDES@": bonds,
+        "@SETBOX@": f"set sys box {{ {dims[0]:.3f} {dims[1]:.3f} {dims[2]:.3f} }}",
+        "@LIGAND_PARAMS@": ligand_params,
+    }
+    filled, seen = [], set()
+    for line in template.read_text().splitlines():
+        key = line.strip()
+        if key in blocks:
+            filled.append(blocks[key])
+            seen.add(key)
+        else:
+            filled.append(line)
+    unfilled = set(blocks) - seen
+    if unfilled:
+        print(f"ERROR: {', '.join(sorted(unfilled))} does not appear on a line of its own in "
+              f"{template}; cannot fill it.", file=sys.stderr)
+        return 1
+    # @SYSTEM_PDB@ is inline (`sys = loadpdb @SYSTEM_PDB@`) and single-valued, so it is safe.
+    text = "\n".join(filled).replace("@SYSTEM_PDB@", out_pdb.name)
     Path("tleap_run.in").write_text(text)
     print(f"Wrote tleap_run.in and {out_pdb.name}")
     return 0

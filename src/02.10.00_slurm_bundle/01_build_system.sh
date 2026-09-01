@@ -32,10 +32,23 @@ conda activate "${ZH_PREP_ENV:-zh853mor-prep}"   # AmberTools / PACKMOL-Memgen /
 # Generated artefacts live under intermediate/, never in src/ (SPECIFICATION D-16).
 D250="${D250:-ASP}"   # ASP = charged D2.50 (default); ASH = protonated variant (D-11)
 case "$D250" in ASP|ASH) ;; *) echo "ERROR: D250 must be ASP or ASH, got '$D250'."; exit 1 ;; esac
-BUILD="${BUILD_DIR:-$REPO/intermediate/02.10.00_build/${D250}_$(date +%Y%m%d_%H%M%S)}"
+
+# Which system to build: the apo receptor, or one of the four ZH cyclic peptides. Orthogonal to
+# D250, so the full panel is 5 x 2 = 10 builds. ligands.py is the single registry.
+LIGAND="${LIGAND:-ZH853}"
+KNOWN="$(python "$HERE/ligands.py" --list)"
+case " $KNOWN " in
+  *" $LIGAND "*) ;;
+  *) echo "ERROR: LIGAND must be one of: $KNOWN (got '$LIGAND')."; exit 1 ;;
+esac
+# Fail here, naming the missing prep artefacts, rather than part-way through packing. Only ZH853
+# has a deposited pose; the analogs need one generated first.
+python "$HERE/ligands.py" --check "$LIGAND" --repo "$REPO" || exit 1
+
+BUILD="${BUILD_DIR:-$REPO/intermediate/02.10.00_build/${LIGAND}_${D250}_$(date +%Y%m%d_%H%M%S)}"
 mkdir -p "$BUILD"
 [ -z "$(ls -A "$BUILD")" ] || { echo "ERROR: build dir $BUILD is not empty."; exit 1; }
-echo "Building in $BUILD (D2.50 = $D250)"
+echo "Building in $BUILD (ligand = $LIGAND, D2.50 = $D250)"
 
 # --- stage inputs -------------------------------------------------------------------------
 # Receptor: use the membrane-ORIENTED file (normal along z) so --preoriented is valid.
@@ -43,16 +56,29 @@ echo "Building in $BUILD (D2.50 = $D250)"
 # caps and the named His tautomers from 02.03.00, so no downstream default can override them.
 # The D2.50 variant is a pure residue rename -- same geometry, so it is applied here rather than
 # by duplicating the whole prep/orient chain (D-11).
+# For a ligand build the ligand must be PACKED WITH the receptor -- loadmol2 alone leaves it out of
+# the box entirely, which is how every build before this one came out silently apo.
+#
+# The ligand is GRAFTED onto the finalised receptor rather than taken from complex_oriented.pdb
+# wholesale: that file was written from the raw deposited complex and still has bare HIS and no
+# ACE/NME caps, so using it directly would rebuild the system with charged termini and default
+# tautomers (the staleness guard below catches exactly this). Both files carry the same OPM
+# transform, which ligands.py verifies rather than assumes before transferring the pose.
+python "$HERE/ligands.py" --graft "$LIGAND" --repo "$REPO" --out "$BUILD/receptor_staged.pdb" || exit 1
+
+# The D2.50 variant is a pure residue rename -- same geometry -- so it is applied to the staged
+# copy rather than by duplicating the whole prep/orient chain (D-11).
 if [ "$D250" = "ASH" ]; then
   awk '{ if ((substr($0,1,4)=="ATOM") && substr($0,18,3)=="ASP" && (substr($0,23,4)+0)==116)
            print substr($0,1,17) "ASH" substr($0,21); else print }' \
-    "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" > "$BUILD/receptor.pdb"
+    "$BUILD/receptor_staged.pdb" > "$BUILD/receptor.pdb"
   grep -qc " ASH R 116" "$BUILD/receptor.pdb" || { echo "ERROR: ASP116->ASH rename found no atoms."; exit 1; }
 else
-  cp "$REPO/intermediate/02.05.00_oriented/receptorR_oriented.pdb" "$BUILD/receptor.pdb"
+  cp "$BUILD/receptor_staged.pdb" "$BUILD/receptor.pdb"
 fi
+rm -f "$BUILD/receptor_staged.pdb"
 cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/fix_caps.py" "$HERE/check_placement.py" \
-   "$HERE/check_piercing.py" "$BUILD/"
+   "$HERE/check_piercing.py" "$HERE/fix_ligand.py" "$HERE/ligands.py" "$BUILD/"
 # Stage the run scripts too. The sbatch files invoke `python 02_equilibrate.py` by bare name and
 # SLURM starts a job in the *submission* directory, so the build dir must be self-contained:
 # everything for steps 3-5 is submitted from here, beside the system.prmtop it reads.
@@ -86,9 +112,27 @@ if [ -n "$missing" ]; then
   echo "  then copy intermediate/02.05.00_oriented/receptorR_oriented.pdb to this machine."
   exit 1
 fi
-# Ligand parameters come from ligand_resp/run_resp.sh (run that first):
-cp "$HERE"/ligand_resp/ZH853.mol2 "$HERE"/ligand_resp/ZH853.frcmod "$BUILD/" 2>/dev/null || \
-  echo "WARNING: ZH853.mol2/.frcmod not found -- run ligand_resp/run_resp.sh first."
+# Ligand parameters come from ligand_resp/run_resp.sh, per ligand. Missing parameters used to be a
+# warning; it is an error now, because the build would otherwise proceed and produce a system
+# without the ligand it claims to have.
+if [ "$LIGAND" != "apo" ]; then
+  LIGDIR="$HERE/ligand_resp/$LIGAND"
+  if [ ! -f "$LIGDIR/$LIGAND.mol2" ] || [ ! -f "$LIGDIR/$LIGAND.frcmod" ]; then
+    echo "ERROR: $LIGDIR/$LIGAND.{mol2,frcmod} not found."
+    echo "  Parameterize the ligand first:  ./ligand_resp/run_resp.sh $LIGAND"
+    exit 1
+  fi
+  cp "$LIGDIR/$LIGAND.mol2" "$LIGDIR/$LIGAND.frcmod" "$BUILD/"
+fi
+
+# Record what this build IS, so downstream steps do not have to guess from the directory name.
+python - "$BUILD/system.json" "$LIGAND" "$D250" <<'PYJSON'
+import json, sys
+out, ligand, d250 = sys.argv[1:4]
+json.dump({"ligand": ligand, "d250": d250,
+           "ligand_resname": "" if ligand == "apo" else "LIG"},
+          open(out, "w"), indent=2)
+PYJSON
 
 cd "$BUILD"
 
@@ -124,6 +168,19 @@ mv -f bilayer_receptor.pdb bilayer_system.pdb
 # installed library's template (renames and stray-H removal only; geometry is untouched).
 python fix_caps.py bilayer_system.pdb receptor.pdb
 
+# --- reconcile the ligand with its mol2 template ---------------------------------------------
+# loadpdb matches atoms to a unit template BY NAME, and two names are guaranteed not to match:
+# the deposited pose calls the ligand L01 while antechamber is run with -rn LIG, and SDF carries
+# no atom names so antechamber GENERATES them (C1, C2 ...) rather than keeping C20/C30/...
+# fix_ligand.py maps positionally (heavy-atom order is preserved from the deposited molecule
+# through RDKit AddHs into the SDF), verifies the element sequence, and aborts rather than
+# renaming atoms onto the wrong templates. It also fails loudly if the ligand did not survive
+# packmol-memgen's reduce preprocessing at all.
+if [ "$LIGAND" != "apo" ]; then
+  LIG_IN="$(python ligands.py --field input_resname --ligand "$LIGAND")"
+  python fix_ligand.py bilayer_system.pdb "$LIGAND.mol2" --input-resname "$LIG_IN"
+fi
+
 # --- verify the OPM membrane registration survived the build (SPECIFICATION D-14) ------------
 # Measured 2026-07-26: --preoriented is honoured, translation (+0.02, -0.18, +0.00) A, so the OPM
 # frame from 02.05.00 survives. This is a regression guard for the case where it does not -- memgen
@@ -146,11 +203,14 @@ python check_piercing.py bilayer_system.pdb || true
 # --- assemble with tleap (ff19SB + Lipid21 + OPC + GAFF2/RESP ligand) ------------------------
 # make_tleap.py fills in the disulfide bond (loadpdb renumbers residues sequentially, so the
 # OPRM1 numbering is gone) and the periodic box (must be PACKMOL's cell, not `setBox vdw`).
-python make_tleap.py bilayer_system.pdb
+python make_tleap.py bilayer_system.pdb --ligand "$LIGAND"
 tleap -f tleap_run.in
 
-echo "Built system.prmtop / system.rst7 in $BUILD."
-echo "Duplicate with D2.50 (Asp116) protonated for the parallel run."
+echo "Built system.prmtop / system.rst7 in $BUILD  (ligand = $LIGAND, D2.50 = $D250)."
+echo "The full panel is 5 ligands x 2 D2.50 states:"
+echo "    for L in $(python "$HERE/ligands.py" --list); do"
+echo "      for D in ASP ASH; do LIGAND=\$L D250=\$D ./01_build_system.sh; done"
+echo "    done"
 cat <<EOF
 
 Next (steps 3-5 run from the build directory, not from src/):
