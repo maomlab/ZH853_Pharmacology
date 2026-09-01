@@ -334,7 +334,7 @@ It judges convergence on the **final, least-restrained stage only** (read from
 | Membrane | area per lipid (55–70 Å², protein cross-section subtracted via an xy convex hull) and its drift, P–P thickness (34–44 Å) | WARN |
 
 | Packing | waters left in the lipid core, excluding those within 6 Å of the protein; ring piercing on the final frame via `check_piercing.py` | WARN |
-| Protein | Cα RMSD whole (≤3 Å) and membrane-embedded (≤2 Å) vs the staged receptor; C142–C219 SG–SG (1.9–2.3 Å) | FAIL |
+| Protein | Cα RMSD whole (≤3 Å) and membrane-embedded (≤2 Å) vs the staged receptor, **superposed**; C142–C219 SG–SG (1.9–2.3 Å), found as the bonded pair among all SG atoms | FAIL |
 | Registration | vertical drift out of the OPM slab vs frame 0 (≤2 Å) | FAIL |
 
 FAIL means something is physically wrong and exits non-zero; WARN means still relaxing and exits 0.
@@ -355,6 +355,15 @@ and put the area per lipid out by 3×, turning a healthy membrane into a hard FA
 Density and box matter more than usual for this build: `make_tleap.py` may have fallen back to the
 packed extent + 2 × 1.25 Å (it says so loudly), and that is exactly the case where the barostat has
 real work to do — so confirm they flatten rather than assuming it.
+
+Both protein checks have a subtlety worth knowing. The Cα RMSD is computed **after rigid-body
+superposition**, because packmol-memgen translates the solute when it packs — the very shift
+ measures — so an absolute coordinate difference against the pre-packing
+ reports that translation rather than any conformational change (it read 84.8 Å on a
+sound system). Rigid-body motion is not lost: the OPM registration drift covers it, measured
+against the bilayer midplane and so translation-invariant by construction. And the disulfide is
+found as *the bonded SG–SG pair*, not by assuming the system contains only two SG atoms — this
+construct has twelve cysteines, one modelled disulfide.
 
 Two notes on what this can and cannot reuse. `check_placement.py` is **not** re-run here: it
 requires the receptor to be a rigid translation of `receptor.pdb` (max residual 0.05 Å) and refuses

@@ -29,6 +29,7 @@ from pathlib import Path
 
 import MDAnalysis as mda
 import numpy as np
+from MDAnalysis.analysis.rms import rmsd as rmsd_superposed
 from MDAnalysis.lib.distances import capped_distance
 
 # --- thresholds -------------------------------------------------------------------------------
@@ -44,6 +45,7 @@ CA_RMSD_MAX = 3.0              # A, whole receptor vs the staged (OPM-oriented) 
 TM_RMSD_MAX = 2.0              # A, membrane-embedded CA only -- the number that should be tight
 REGISTRATION_DRIFT_A = 2.0     # A of vertical drift out of the OPM slab over the run
 SG_RANGE = (1.90, 2.30)        # A, C142-C219 disulfide
+SS_CUTOFF_A = 2.50             # SG-SG separation counted as bonded (cf. make_tleap.py)
 LIG_RMSD_MAX = 3.0             # A, receptor-aligned ligand drift over the ramp
 CORE_HALF_A = 8.0              # |z - midplane| defining the hydrophobic core
 TM_HALF_A = 15.0               # |z - midplane| defining the membrane-embedded CA set
@@ -181,11 +183,18 @@ def main() -> int:
     ap.add_argument("--skip-piercing", action="store_true")
     args = ap.parse_args()
 
+    # system.json records what the build IS. Builds made before it existed have none, and there
+    # the intent is genuinely unknown -- reporting "system.json expects a ligand" against a file
+    # that does not exist sends the reader to the wrong place.
+    meta_known = False
     if args.lig is None:
         try:
             args.lig = json.loads(Path("system.json").read_text()).get("ligand_resname") or "apo"
+            meta_known = True
         except (OSError, ValueError):
             args.lig = "LIG"
+    else:
+        meta_known = True
 
     eq = Path(args.eq)
     log_p, dcd_p, stg_p = Path(f"{eq}.log"), Path(f"{eq}.dcd"), Path(f"{eq}_stages.json")
@@ -302,12 +311,26 @@ def main() -> int:
             tm_mask = np.abs(cap[:, 2] - mid) < TM_HALF_A
         reg.append(float(cap[tm_mask][:, 2].mean() - mid))
         if ca_ok:
-            rmsd_all.append(float(np.sqrt(((cap - ref_ca) ** 2).sum(axis=1).mean())))
-            rmsd_tm.append(float(np.sqrt(
-                ((cap[tm_mask] - ref_ca[tm_mask]) ** 2).sum(axis=1).mean())))
+            # SUPERPOSED. A raw coordinate difference is meaningless here: packmol-memgen
+            # translates the solute when it packs (that shift is what check_placement.py
+            # measures), so comparing absolute positions against the pre-packing receptor.pdb
+            # reports the translation, not the conformational change -- it read 84.8 A on a
+            # perfectly good system. Rigid-body motion is covered separately by the OPM
+            # registration drift, which is measured against the bilayer midplane and so is
+            # already translation-invariant.
+            rmsd_all.append(float(rmsd_superposed(cap, ref_ca, superposition=True)))
+            rmsd_tm.append(float(rmsd_superposed(cap[tm_mask], ref_ca[tm_mask],
+                                                 superposition=True)))
         if len(sg) >= 2:
-            d = np.linalg.norm(sg.positions[0] - sg.positions[1])
-            sgd.append(float(d) if len(sg) == 2 else np.nan)
+            # The construct has many cysteines (12 SG here), only one of which is the modelled
+            # C142-C219 disulfide, so pick out bonded PAIRS by distance rather than assuming the
+            # only two SG atoms in the system are the pair. Same approach make_tleap.py uses to
+            # emit the  line in the first place.
+            p_ = sg.positions
+            dm = np.linalg.norm(p_[:, None, :] - p_[None, :, :], axis=2)
+            iu = np.triu_indices(len(sg), k=1)
+            close = [float(dm[i, j]) for i, j in zip(*iu) if dm[i, j] <= SS_CUTOFF_A]
+            sgd.append(close)
         if len(lig):
             if not lig_ref:
                 lig_ref.append(lig.positions.copy())
@@ -361,13 +384,24 @@ def main() -> int:
         rep.judge(f"ligand RMSD ({args.lig})", lig_rmsd[-1], 0.0, LIG_RMSD_MAX, unit=" A",
                   detail=f"<= {LIG_RMSD_MAX} A; the ligand should stay in the pocket")
     elif args.lig.lower() != "apo":
-        rep.add(f"ligand ({args.lig})", "absent", "FAIL",
-                "system.json expects a ligand but the topology has none -- an apo build")
-    if len(sg) == 2:
-        rep.judge("disulfide SG-SG", sgd[-1], *SG_RANGE, unit=" A")
+        if meta_known:
+            rep.add(f"ligand ({args.lig})", "absent", "FAIL",
+                    "a ligand was requested but the topology has none -- this built apo")
+        else:
+            rep.add("ligand", "none in topology", "WARN",
+                    "no system.json (build predates it), so the intent is unknown; pass --lig apo "
+                    "if this is the apo arm")
+    bonded = sgd[-1] if sgd else []
+    if len(bonded) == 1:
+        rep.judge("disulfide SG-SG", bonded[0], *SG_RANGE, unit=" A",
+                  detail=f"1 bonded pair among {len(sg)} SG atoms (C142-C219)")
+    elif not bonded:
+        rep.add("disulfide SG-SG", f"0 of {len(sg)} SG bonded", "FAIL",
+                f"no SG-SG pair within {SS_CUTOFF_A} A -- the tleap bond did not take")
     else:
-        rep.add("disulfide SG-SG", f"{len(sg)} SG atoms", "WARN",
-                "expected exactly 2 (C142/C219); cannot verify the tleap bond")
+        rep.add("disulfide SG-SG", f"{len(bonded)} pairs", "WARN",
+                f"expected 1 (C142-C219) among {len(sg)} SG atoms: "
+                + ", ".join(f"{d:.2f}" for d in bonded) + " A")
 
     # --- 5. lipid ring piercing (topological: minimisation cannot undo it) ----------------------
     if not args.skip_piercing and pdb_p.exists() and Path("check_piercing.py").exists():
