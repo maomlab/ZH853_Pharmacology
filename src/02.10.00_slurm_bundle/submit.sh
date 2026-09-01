@@ -7,12 +7,12 @@
 #   ./submit.sh eq             # step 3    restrained ramp -> ${ZH_SYS}_eq.xml + eq_qc
 #   ./submit.sh preprod        # step 3.5  unrestrained equilibration (DISCARDED) -> preprod_final.xml
 #   ./submit.sh prod           # step 4    production job array (resumes from preprod_final.xml)
-#   ./submit.sh all            # eq -> preprod -> prod, chained with --dependency=afterok
+#   ./submit.sh all-simulations  # eq -> preprod -> prod, chained with --dependency=afterok
 #   ./submit.sh <any> -n       # dry run: print the sbatch command, submit nothing
 #
 # WHERE TO RUN IT:
 #   params, build, check  -- from this bundle directory (src/02.10.00_slurm_bundle)
-#   eq, preprod, prod, all -- from a BUILD directory (intermediate/02.10.00_build/<name>/), which
+#   eq, preprod, prod, all-simulations -- from a BUILD directory (intermediate/02.10.00_build/<name>/), which
 #                             01_build_system.sh stages with everything those stages need.
 #
 # Site values come from cluster.env at the REPOSITORY ROOT and are passed to sbatch on the COMMAND
@@ -35,7 +35,11 @@ STAGE=""
 DRY=0
 for arg in "$@"; do
   case "$arg" in
-    params|build|check|eq|preprod|prod|all) [ -z "$STAGE" ] || die "give only one stage, got '$STAGE' and '$arg'."; STAGE="$arg" ;;
+    params|build|check|eq|preprod|prod|all-simulations)
+                       [ -z "$STAGE" ] || die "give only one stage, got '$STAGE' and '$arg'."
+                       STAGE="$arg" ;;
+    all)               die "'all' was renamed 'all-simulations': it chains only the simulation
+  stages (eq -> preprod -> prod), not the CPU 'params' and 'build' stages that precede them." ;;
     -n|--dry-run)      DRY=1 ;;
     -h|--help)         usage 0 ;;
     *)                 echo "ERROR: unknown argument '$arg'." >&2; usage 1 ;;
@@ -196,7 +200,7 @@ case "$STAGE" in
                  --job-name=zh853_build --output=build_%A_%a.out)
     echo "submitted builds: $jid   ($N_SYSTEMS systems x 2 D2.50 states = $n array tasks)"
     echo "  -> intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/"
-    echo "then, from each build directory: ./submit.sh all"
+    echo "then, from each build directory: ./submit.sh all-simulations"
     ;;
   check)
     # The pre-flight is tiny; do not hold a full training-sized allocation for it.
@@ -231,7 +235,7 @@ case "$STAGE" in
     estimate "$ZH_PROD_NS" "$PROD_RATE" "$ZH_GPU_PROD_TIME" "at 4 fs, PER REPLICA"
     echo "  (array tasks run concurrently if the queue has $ZH_REPLICAS GPUs free, serially otherwise)"
     ;;
-  all)
+  all-simulations)
     need "${ZH_SYS}.prmtop"; need "${ZH_SYS}.rst7"
     # afterok, not afterany, at both links: each stage loads the state the previous one wrote, and
     # each runs check_equilibration.py, which exits non-zero on a FAIL. So a broken system stops

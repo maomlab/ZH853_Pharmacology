@@ -5,7 +5,7 @@
 # Step 3.5: UNRESTRAINED pre-production. Submit with the wrapper, from the BUILD DIRECTORY,
 # after step 3:
 #
-#     ./submit.sh preprod       # or: ./submit.sh all   (chains eq -> preprod -> prod)
+#     ./submit.sh preprod       # or: ./submit.sh all-simulations   (eq -> preprod -> prod)
 #
 # Why this exists: the six-stage ramp in step 3 is ~2.25 ns, adapted from CHARMM-GUI -- which
 # hands its schedule a PRE-EQUILIBRATED bilayer from its own builder. Ours comes straight from

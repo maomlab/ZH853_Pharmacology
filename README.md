@@ -60,7 +60,7 @@ Run `make help` for the grouped target list.
 | 4 | Copy prep outputs to the cluster | `scp` — see below | → cluster |
 | 5 | Ligand force-field parameters | `./submit.sh params` (4-task array) | cluster (CPU) |
 | 6 | Build the membrane systems | `./submit.sh build` (10-task array) | cluster (CPU) |
-| 7 | Equilibrate → pre-produce → produce | `./submit.sh all` (or `check` / `eq` / `preprod` / `prod`) | cluster (GPU) |
+| 7 | Equilibrate → pre-produce → produce | `./submit.sh all-simulations` (or `eq` / `preprod` / `prod`) | cluster (GPU) |
 | 8 | Trajectory QC | `04_analyze.py` | cluster |
 
 **Steps 5–8 are the SLURM bundle. Follow
@@ -123,7 +123,7 @@ why `01_build_system.sh` insists on a pristine one.
 To run either without SLURM, the underlying commands still work directly:
 `make prep-ligand-parameterize`, and `LIGAND=… D250=… ./01_build_system.sh`.
 
-Then, from each build directory, `./submit.sh all`.
+Then, from each build directory, `./submit.sh all-simulations`.
 
 ## Status
 Phases 0–1 and static interaction analysis (Phase 3) complete — see [`docs/PLAN.md`](docs/PLAN.md)

@@ -5,7 +5,7 @@
 # Step 4: restraint-free production, one replica per array task. Submit with the wrapper, from the
 # BUILD DIRECTORY, after step 3 has finished:
 #
-#     ./submit.sh prod          # or: ./submit.sh all   (chains eq -> prod with afterok)
+#     ./submit.sh prod          # or: ./submit.sh all-simulations   (chains eq -> prod)
 #
 # Account, partition, GPU, wall-time and the array size (ZH_REPLICAS, SPECIFICATION QC wants >=3
 # for a replicate spread) are NOT set here on purpose -- they live in cluster.env and submit.sh

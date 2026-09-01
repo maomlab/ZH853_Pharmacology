@@ -245,7 +245,7 @@ cat <<EOF
 Next (steps 3-5 run from the build directory, not from src/):
     cd $BUILD
     ./submit.sh check     # optional GPU pre-flight
-    ./submit.sh all       # eq -> unrestrained pre-production -> production, chained on afterok
+    ./submit.sh all-simulations   # eq -> unrestrained pre-production -> production (afterok)
 Cluster account/partition/GPU/wall-time all come from cluster.env; edit that one file, not the
-.sbatch scripts. \`./submit.sh all -n\` prints the sbatch commands without submitting.
+.sbatch scripts. \`./submit.sh all-simulations -n\` prints the sbatch commands without submitting.
 EOF

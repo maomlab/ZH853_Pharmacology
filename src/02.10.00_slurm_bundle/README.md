@@ -299,7 +299,7 @@ and checkpoint outputs are written relative to the CWD and belong with the build
 cd intermediate/02.10.00_build/ASP_20260825_154710
 
 ./submit.sh check     # step 0.5  short GPU pre-flight (openmm on CUDA) -> gpucheck_<jid>.out
-./submit.sh all       # steps 3 -> 3.5 -> 4, chained with afterok
+./submit.sh all-simulations   # steps 3 -> 3.5 -> 4, chained with afterok
 ```
 
 or one stage at a time, to read the QC in between:
@@ -310,7 +310,7 @@ or one stage at a time, to read the QC in between:
 ./submit.sh prod      # step 4   -> prod_r{1,2,3}.dcd
 ```
 
-Add `-n` to any of these to print the `sbatch` command without submitting. `submit.sh all` chains
+Add `-n` to any of these to print the `sbatch` command without submitting. `submit.sh all-simulations` chains
 the three with `--dependency=afterok:` — not `afterany` — because each stage loads the state the
 previous one wrote, and because steps 3 and 3.5 each run `check_equilibration.py`, which exits
 non-zero on a FAIL. A broken system therefore stops the chain instead of consuming
