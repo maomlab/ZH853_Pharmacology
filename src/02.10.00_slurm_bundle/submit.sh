@@ -53,7 +53,7 @@ ENV_FILE="$ZH_CLUSTER_ENV"
 [ -n "${ZH_PARTITION:-}" ] || die "ZH_PARTITION is empty in $ENV_FILE (see: sinfo -s)."
 
 : "${ZH_GRES:=gpu:1}"       ; : "${ZH_CPUS:=8}"          ; : "${ZH_MEM:=32G}"
-: "${ZH_EQ_TIME:=12:00:00}" ; : "${ZH_PROD_TIME:=48:00:00}" ; : "${ZH_CHECK_TIME:=00:05:00}"
+: "${ZH_EQ_TIME:=12:00:00}" ; : "${ZH_PROD_TIME:=72:00:00}" ; : "${ZH_CHECK_TIME:=00:05:00}"
 : "${ZH_REPLICAS:=3}"       ; : "${ZH_PROD_NS:=500}"      ; : "${ZH_SYS:=system}"
 : "${ZH_PREPROD_NS:=100}"   ; : "${ZH_PREPROD_TIME:=24:00:00}"
 # Fixed by the six-stage schedule in 02_equilibrate.py: 1,125,000 steps x 2 fs = 2.25 ns.
