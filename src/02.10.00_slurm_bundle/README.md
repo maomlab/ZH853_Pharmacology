@@ -72,6 +72,8 @@ you `cd` into and submit from. Nothing in steps 3–5 is invoked out of `src/`.
 | 2c | `fix_caps.py` | `zh853mor-prep` | CPU (called by step 2) | — |
 | 2d | `make_tleap.py` | `zh853mor-prep` | CPU (called by step 2) | — |
 | 3 | `./submit.sh eq` → `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU | the build directory |
+| 3a | `check_equilibration.py` | `zh853mor-sim` | CPU (called by steps 3 and 3.5) | — |
+| 3.5 | `./submit.sh preprod` → `submit_preproduction.sbatch` → `03_production.py` | `zh853mor-sim` | GPU | the build directory |
 | 4 | `./submit.sh prod` → `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU | the build directory |
 | 5 | `04_analyze.py` | `zh853mor-sim` | CPU | the build directory |
 
@@ -194,20 +196,22 @@ and checkpoint outputs are written relative to the CWD and belong with the build
 cd intermediate/02.10.00_build/ASP_20260825_154710
 
 ./submit.sh check     # step 0.5  short GPU pre-flight (openmm on CUDA) -> gpucheck_<jid>.out
-./submit.sh all       # steps 3+4 equilibration, then production chained with afterok
+./submit.sh all       # steps 3 -> 3.5 -> 4, chained with afterok
 ```
 
-or one stage at a time, to inspect `system_eq.pdb` in between:
+or one stage at a time, to read the QC in between:
 
 ```bash
-./submit.sh eq        # step 3 -> system_eq.xml, system_eq.pdb
-./submit.sh prod      # step 4 -> prod_r{1,2,3}.dcd  (only after eq has finished)
+./submit.sh eq        # step 3   -> system_eq.xml, system_eq.pdb, eq_qc.{json,png}
+./submit.sh preprod   # step 3.5 -> preprod_final.xml, preprod_qc.{json,png}
+./submit.sh prod      # step 4   -> prod_r{1,2,3}.dcd
 ```
 
 Add `-n` to any of these to print the `sbatch` command without submitting. `submit.sh all` chains
-the two with `--dependency=afterok:` — not `afterany` — because production loads the state
-equilibration writes, so a failed or cancelled step 3 must not launch replicas that would die on a
-missing `.xml`. The wrapper also checks that `system.prmtop`/`system.rst7` are actually in the
+the three with `--dependency=afterok:` — not `afterany` — because each stage loads the state the
+previous one wrote, and because steps 3 and 3.5 each run `check_equilibration.py`, which exits
+non-zero on a FAIL. A broken system therefore stops the chain instead of consuming
+`ZH_REPLICAS × ZH_PROD_NS` ns of GPU time (set `ZH_QC_GATE=0` to run the QC for information only). The wrapper also checks that `system.prmtop`/`system.rst7` are actually in the
 current directory and that `ZH_ACCOUNT`/`ZH_PARTITION` are set, so a wrong directory or an unfilled
 `cluster.env` fails immediately with a pointer, rather than as a queued job that dies minutes later
 or an `Invalid account` rejection with no indication of which file to edit.
@@ -217,6 +221,57 @@ Then, once production finishes (CPU is fine, one call per replica):
 ```bash
 python 04_analyze.py --top system.prmtop --traj prod_r1.dcd --lig LIG --out qc_r1
 ```
+
+### Is it equilibrated? (step 3a)
+
+`check_equilibration.py` runs automatically at the end of steps 3 and 3.5 and writes
+`eq_qc.json`/`.png` and `preprod_qc.json`/`.png`. Run it by hand with:
+
+```bash
+python check_equilibration.py --top system.prmtop --eq system_eq --receptor receptor.pdb
+```
+
+It judges convergence on the **final, least-restrained stage only** (read from
+`system_eq_stages.json`), not averaged over the restraint ramp, and reports:
+
+| Group | Checks | Verdict on failure |
+|-------|--------|--------------------|
+| Thermodynamics | density (0.98–1.10 g/mL) and its drift, temperature (310 ± 2 K), potential-energy drift vs its own σ | FAIL on absolute range, WARN on drift |
+| Box | `Lx`/`Lz` drift between halves of the final stage | WARN |
+| Membrane | area per lipid (55–70 Å², protein cross-section subtracted via an xy convex hull) and its drift, P–P thickness (34–44 Å) | WARN |
+| Packing | waters left in the lipid core, excluding those within 6 Å of the protein; ring piercing on the final frame via `check_piercing.py` | WARN |
+| Protein | Cα RMSD whole (≤3 Å) and membrane-embedded (≤2 Å) vs the staged receptor; C142–C219 SG–SG (1.9–2.3 Å) | FAIL |
+| Registration | vertical drift out of the OPM slab vs frame 0 (≤2 Å) | FAIL |
+
+FAIL means something is physically wrong and exits non-zero; WARN means still relaxing and exits 0.
+Density and box matter more than usual for this build: `make_tleap.py` may have fallen back to the
+packed extent + 2 × 1.25 Å (it says so loudly), and that is exactly the case where the barostat has
+real work to do — so confirm they flatten rather than assuming it.
+
+Two notes on what this can and cannot reuse. `check_placement.py` is **not** re-run here: it
+requires the receptor to be a rigid translation of `receptor.pdb` (max residual 0.05 Å) and refuses
+anything that has relaxed, so the registration drift is measured natively against the run's own
+first frame instead. `check_piercing.py` *is* re-run, on the final frame, because a tail threaded
+through a ring is topological — minimisation separates atoms along straight lines and no such path
+unthreads a ring, so it persists for the whole trajectory.
+
+### Why there is a pre-production leg (step 3.5)
+
+A clean PASS at step 3 means "nothing is broken", **not** "sampling can start". The six-stage ramp
+is ~2.25 ns and is adapted from CHARMM-GUI — which hands that schedule a *pre-equilibrated* bilayer
+from its own builder. Ours comes straight from PACKMOL, where lipids are packed in an artificially
+ordered, extended conformation. The protein relaxes in a few hundred ps; **area per lipid takes tens
+of ns**, and it is the slowest observable in the system. Expect `area/lipid drift` to come back WARN
+after step 3 — that is the normal result, not a fault.
+
+Step 3.5 is that time: `ZH_PREPROD_NS` (default 100) ns of unrestrained NPT, physically identical to
+production (so there is no separate script — it is `03_production.py` with seed 0), **discarded**,
+then re-checked. Raise `ZH_PREPROD_NS` if `area/lipid drift` is still WARN afterwards. It also fixes
+a smaller problem: stage 6 of the ramp still holds the backbone at 10 kJ/mol/nm², so without this leg
+production would resume from a state never sampled unrestrained.
+
+`submit_production.sbatch` then prefers `preprod_final.xml` and falls back to `${ZH_SYS}_eq.xml` with
+a loud warning in the job log; `ZH_PROD_STATE` forces either.
 
 **The file naming is load-bearing.** Both job scripts key off `ZH_SYS` (default `system`, matching
 what tleap writes) and equilibration writes `${ZH_SYS}_eq.xml`, which is exactly what
@@ -244,6 +299,9 @@ production will need restarting from `prod_r<N>.chk` if it does not fit.
 | `ZH_EQ_TIME` / `ZH_PROD_TIME` / `ZH_CHECK_TIME` | `12:00:00` / `48:00:00` / `00:05:00` | |
 | `ZH_QOS` / `ZH_CONSTRAINT` / `ZH_EXTRA_SBATCH` | empty | passed through to `sbatch` when set |
 | `ZH_REPLICAS` / `ZH_PROD_NS` | `3` / `500` | array size and ns per replica |
+| `ZH_PREPROD_NS` / `ZH_PREPROD_TIME` | `100` / `24:00:00` | unrestrained discard leg (step 3.5) |
+| `ZH_QC_GATE` | `1` | a `check_equilibration.py` FAIL exits the job non-zero, breaking the `afterok` chain |
+| `ZH_PROD_STATE` | empty | force the state production resumes from |
 | `ZH_MODULES` | empty | normally stays empty — see CUDA / modules below |
 | `ZH_CONDA_SH` | `$(conda info --base)/…` | set only if conda is not on `PATH` in the job |
 | `ZH_SIM_ENV` / `ZH_PREP_ENV` | `zh853mor-sim` / `zh853mor-prep` | |
@@ -262,8 +320,8 @@ Builds made before the run scripts were staged automatically will not have them.
 ```bash
 cd intermediate/02.10.00_build/ASP_20260825_154710
 cp ../../../src/02.10.00_slurm_bundle/{02_equilibrate.py,03_production.py,04_analyze.py} .
-cp ../../../src/02.10.00_slurm_bundle/{submit_equilibrate,submit_production}.sbatch .
-cp ../../../src/02.10.00_slurm_bundle/{submit.sh,check_gpu_env.sh} .
+cp ../../../src/02.10.00_slurm_bundle/{submit_equilibrate,submit_preproduction,submit_production}.sbatch .
+cp ../../../src/02.10.00_slurm_bundle/{submit.sh,check_gpu_env.sh,check_equilibration.py,check_piercing.py} .
 ```
 
 `cluster.env` need not be copied — `submit.sh` falls back to the bundle's copy.

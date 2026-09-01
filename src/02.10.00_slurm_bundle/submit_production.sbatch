@@ -11,7 +11,8 @@
 # for a replicate spread) are NOT set here on purpose -- they live in cluster.env and submit.sh
 # passes them as sbatch command-line flags, which override any #SBATCH directive.
 #
-# Reads ${ZH_SYS}_eq.xml, written by submit_equilibrate.sbatch.
+# Reads preprod_final.xml if the unrestrained pre-production leg (step 3.5) has run, otherwise
+# ${ZH_SYS}_eq.xml straight from the ramp. Set ZH_PROD_STATE to force one.
 
 set -euo pipefail
 
@@ -34,11 +35,26 @@ SYS="${ZH_SYS:-system}"          # basename of prmtop/rst7 and the equilibrated 
 REP="${SLURM_ARRAY_TASK_ID:-1}"  # replica index, also the RNG seed
 NS="${ZH_PROD_NS:-500}"
 
-echo "host: $(hostname)  job: ${SLURM_JOB_ID:-none}  replica: ${REP}  ${NS} ns"
+# Prefer the state that has actually equilibrated. Starting from the ramp alone means starting
+# from a bilayer whose area per lipid has not converged and a backbone still weakly restrained,
+# so say loudly which one is being used rather than letting it pass unnoticed.
+STATE="${ZH_PROD_STATE:-}"
+if [ -z "$STATE" ]; then
+  if [ -f preprod_final.xml ]; then
+    STATE=preprod_final.xml
+  else
+    STATE="${SYS}_eq.xml"
+    echo "WARNING: preprod_final.xml not found -- starting production straight from the restrained"
+    echo "         ramp. The bilayer is probably not equilibrated; see ./submit.sh preprod."
+  fi
+fi
+[ -f "$STATE" ] || { echo "ERROR: state file $STATE not found in $PWD."; exit 1; }
+
+echo "host: $(hostname)  job: ${SLURM_JOB_ID:-none}  replica: ${REP}  ${NS} ns  state: ${STATE}"
 python -c "import openmm; print('openmm', openmm.version.version)"
 
 python 03_production.py \
   --prmtop "${SYS}.prmtop" \
-  --state  "${SYS}_eq.xml" \
+  --state  "${STATE}" \
   --out    "prod_r${REP}" \
   --ns "${NS}" --seed "${REP}"

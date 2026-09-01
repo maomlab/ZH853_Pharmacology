@@ -2,9 +2,10 @@
 # Single entry point for the GPU stages (0.5, 3, 4) of the ZH853-MOR bundle.
 #
 #   ./submit.sh check          # step 0.5  pre-flight: can this env run OpenMM on CUDA?
-#   ./submit.sh eq             # step 3    restrained equilibration -> ${ZH_SYS}_eq.xml
-#   ./submit.sh prod           # step 4    production job array (needs eq to have finished)
-#   ./submit.sh all            # eq, then prod chained with --dependency=afterok
+#   ./submit.sh eq             # step 3    restrained ramp -> ${ZH_SYS}_eq.xml + eq_qc
+#   ./submit.sh preprod        # step 3.5  unrestrained equilibration (DISCARDED) -> preprod_final.xml
+#   ./submit.sh prod           # step 4    production job array (resumes from preprod_final.xml)
+#   ./submit.sh all            # eq -> preprod -> prod, chained with --dependency=afterok
 #   ./submit.sh <any> -n       # dry run: print the sbatch command, submit nothing
 #
 # Run it from the BUILD DIRECTORY (intermediate/02.10.00_build/<D250>_<timestamp>/), which
@@ -30,7 +31,7 @@ STAGE=""
 DRY=0
 for arg in "$@"; do
   case "$arg" in
-    check|eq|prod|all) [ -z "$STAGE" ] || die "give only one stage, got '$STAGE' and '$arg'."; STAGE="$arg" ;;
+    check|eq|preprod|prod|all) [ -z "$STAGE" ] || die "give only one stage, got '$STAGE' and '$arg'."; STAGE="$arg" ;;
     -n|--dry-run)      DRY=1 ;;
     -h|--help)         usage 0 ;;
     *)                 echo "ERROR: unknown argument '$arg'." >&2; usage 1 ;;
@@ -63,6 +64,7 @@ echo "cluster settings: $ENV_FILE"
 : "${ZH_GRES:=gpu:1}"       ; : "${ZH_CPUS:=8}"          ; : "${ZH_MEM:=32G}"
 : "${ZH_EQ_TIME:=12:00:00}" ; : "${ZH_PROD_TIME:=48:00:00}" ; : "${ZH_CHECK_TIME:=00:05:00}"
 : "${ZH_REPLICAS:=3}"       ; : "${ZH_PROD_NS:=500}"      ; : "${ZH_SYS:=system}"
+: "${ZH_PREPROD_NS:=100}"   ; : "${ZH_PREPROD_TIME:=24:00:00}"
 
 SBATCH_ARGS=(
   --account="$ZH_ACCOUNT"
@@ -102,8 +104,17 @@ case "$STAGE" in
     need "${ZH_SYS}.prmtop"; need "${ZH_SYS}.rst7"
     jid=$(submit submit_equilibrate.sbatch --time="$ZH_EQ_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
                  --job-name=zh853_eq --output=eq_%j.out)
-    echo "submitted equilibration: $jid   -> ${ZH_SYS}_eq.xml"
-    echo "then: ./submit.sh prod   (or resubmit with: sbatch --dependency=afterok:$jid ...)"
+    echo "submitted equilibration: $jid   -> ${ZH_SYS}_eq.xml + eq_qc.{json,png}"
+    echo "then: ./submit.sh preprod"
+    ;;
+  preprod)
+    need "${ZH_SYS}.prmtop"
+    [ -f "${ZH_SYS}_eq.xml" ] || echo "WARNING: ${ZH_SYS}_eq.xml not present yet -- step 3 must finish first."
+    jid=$(submit submit_preproduction.sbatch --time="$ZH_PREPROD_TIME" \
+                 --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
+                 --job-name=zh853_preprod --output=preprod_%j.out)
+    echo "submitted pre-production: $jid   ($ZH_PREPROD_NS ns, unrestrained, discarded)"
+    echo "then: ./submit.sh prod"
     ;;
   prod)
     need "${ZH_SYS}.prmtop"
@@ -114,16 +125,23 @@ case "$STAGE" in
     ;;
   all)
     need "${ZH_SYS}.prmtop"; need "${ZH_SYS}.rst7"
+    # afterok, not afterany, at both links: each stage loads the state the previous one wrote, and
+    # each runs check_equilibration.py, which exits non-zero on a FAIL. So a broken system stops
+    # the chain here instead of consuming ZH_REPLICAS x ZH_PROD_NS ns of GPU time.
     eq=$(submit submit_equilibrate.sbatch --time="$ZH_EQ_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
                 --job-name=zh853_eq --output=eq_%j.out)
-    echo "submitted equilibration: $eq   -> ${ZH_SYS}_eq.xml"
-    # afterok, not afterany: production loads the state equilibration writes, so a failed or
-    # cancelled eq must not launch replicas that would die on a missing/half-written .xml.
-    dep=(--dependency="afterok:$eq")
-    if [ "$DRY" -eq 1 ]; then dep=(--dependency="afterok:<eq_jobid>"); fi
+    echo "submitted equilibration:  $eq   -> ${ZH_SYS}_eq.xml + eq_qc.{json,png}"
+    dep_eq=(--dependency="afterok:$eq")
+    if [ "$DRY" -eq 1 ]; then dep_eq=(--dependency="afterok:<eq_jobid>"); fi
+    pre=$(submit submit_preproduction.sbatch --time="$ZH_PREPROD_TIME" \
+                 --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" \
+                 --job-name=zh853_preprod --output=preprod_%j.out "${dep_eq[@]}")
+    echo "submitted pre-production: $pre   ($ZH_PREPROD_NS ns unrestrained, discarded)"
+    dep_pre=(--dependency="afterok:$pre")
+    if [ "$DRY" -eq 1 ]; then dep_pre=(--dependency="afterok:<preprod_jobid>"); fi
     prod=$(submit submit_production.sbatch --time="$ZH_PROD_TIME" --cpus-per-task="$ZH_CPUS" --mem="$ZH_MEM" --array="1-${ZH_REPLICAS}" \
-                  --job-name=zh853_prod --output=prod_%A_%a.out "${dep[@]}")
-    echo "submitted production:    $prod   (held until $eq succeeds; $ZH_REPLICAS replicas x $ZH_PROD_NS ns)"
+                  --job-name=zh853_prod --output=prod_%A_%a.out "${dep_pre[@]}")
+    echo "submitted production:     $prod   ($ZH_REPLICAS replicas x $ZH_PROD_NS ns)"
     echo "watch: squeue -u \$USER"
     ;;
 esac

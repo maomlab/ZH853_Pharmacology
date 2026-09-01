@@ -39,3 +39,14 @@ echo "host: $(hostname)  job: ${SLURM_JOB_ID:-none}  system: ${SYS}"
 python -c "import openmm; print('openmm', openmm.version.version)"
 
 python 02_equilibrate.py --prmtop "${SYS}.prmtop" --inpcrd "${SYS}.rst7" --out "${SYS}_eq"
+
+# Assess it here, in the job, rather than hoping someone looks. With ZH_QC_GATE=1 (default) a
+# FAIL exits non-zero so anything chained with --dependency=afterok never starts on a broken
+# system. A WARN exits 0: after a 2.25 ns ramp "still relaxing" is the expected answer, and the
+# pre-production leg is what fixes it.
+echo
+if [ "${ZH_QC_GATE:-1}" = "1" ]; then
+  python check_equilibration.py --top "${SYS}.prmtop" --eq "${SYS}_eq" --receptor receptor.pdb --out eq_qc
+else
+  python check_equilibration.py --top "${SYS}.prmtop" --eq "${SYS}_eq" --receptor receptor.pdb --out eq_qc || true
+fi

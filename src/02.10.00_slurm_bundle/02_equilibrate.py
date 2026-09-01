@@ -16,6 +16,7 @@ reads back `${SYS}_eq.xml`, so `--out eq` would strand step 4:
 from __future__ import annotations
 
 import argparse
+import json
 
 import openmm as mm
 from openmm import app, unit
@@ -69,6 +70,11 @@ def main() -> None:
     ap.add_argument("--prmtop", required=True)
     ap.add_argument("--inpcrd", required=True)
     ap.add_argument("--out", default="eq")
+    ap.add_argument("--report-ps", type=float, default=5.0,
+                    help="state-log cadence in ps (energy/T/density/volume)")
+    ap.add_argument("--dcd-ps", type=float, default=20.0,
+                    help="trajectory cadence in ps; frames carry the box, so this sets the "
+                         "resolution of the area-per-lipid and thickness traces")
     args = ap.parse_args()
 
     prmtop = app.AmberPrmtopFile(args.prmtop)
@@ -88,6 +94,21 @@ def main() -> None:
         sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
     sim.minimizeEnergy(maxIterations=5000)
 
+    # Equilibration is only assessable if it leaves a trace. The state log carries the
+    # thermodynamic plateau (energy/T/density/volume); the DCD carries the periodic box per frame,
+    # which is what area-per-lipid and bilayer thickness are computed from. check_equilibration.py
+    # reads both, and the stage manifest below so it can restrict "has it converged" to the final,
+    # least-restrained stage rather than averaging over the restraint ramp.
+    log_every = max(1, int((args.report_ps * unit.picoseconds) / DT))
+    dcd_every = max(1, int((args.dcd_ps * unit.picoseconds) / DT))
+    sim.reporters.append(app.StateDataReporter(
+        f"{args.out}.log", log_every, step=True, time=True, potentialEnergy=True,
+        kineticEnergy=True, temperature=True, density=True, volume=True, speed=True,
+    ))
+    sim.reporters.append(app.DCDReporter(f"{args.out}.dcd", dcd_every))
+
+    manifest = {"dt_fs": DT.value_in_unit(unit.femtoseconds), "log_every_steps": log_every,
+                "dcd_every_steps": dcd_every, "stages": []}
     barostat = None
     for n, (kb, ks, kl, ensemble, steps) in enumerate(STAGES, 1):
         for grp, k in (("backbone", kb), ("sidechain", ks), ("lipid", kl)):
@@ -105,12 +126,21 @@ def main() -> None:
             sim.context.reinitialize(preserveState=True)
         sim.context.setVelocitiesToTemperature(TEMP)
         print(f"[stage {n}/6] {ensemble} k=({kb},{ks},{kl}) steps={steps}", flush=True)
+        first = sim.currentStep + 1
         sim.step(steps)
+        manifest["stages"].append({
+            "stage": n, "ensemble": ensemble, "k_backbone": kb, "k_sidechain": ks, "k_lipid": kl,
+            "first_step": first, "last_step": sim.currentStep,
+        })
 
+    with open(f"{args.out}_stages.json", "w") as fh:
+        json.dump(manifest, fh, indent=2)
     sim.saveState(f"{args.out}.xml")
     with open(f"{args.out}.pdb", "w") as fh:
         app.PDBFile.writeFile(prmtop.topology, sim.context.getState(getPositions=True).getPositions(), fh)
     print(f"Equilibration complete -> {args.out}.xml")
+    print(f"QC next: python check_equilibration.py --top {args.prmtop} --eq {args.out} "
+          f"--receptor receptor.pdb")
 
 
 if __name__ == "__main__":

@@ -63,6 +63,11 @@ def main() -> None:
     print(f"Production: {args.ns} ns, {steps} steps @ {DT}, seed {args.seed}", flush=True)
     sim.step(steps)
     sim.saveState(f"{args.out}_final.xml")
+    # Final frame as PDB: check_equilibration.py hands it to check_piercing.py, which needs
+    # coordinates rather than a serialised State.
+    with open(f"{args.out}_final.pdb", "w") as fh:
+        app.PDBFile.writeFile(prmtop.topology,
+                              sim.context.getState(getPositions=True).getPositions(), fh)
     print(f"Done -> {args.out}.dcd")
 
 

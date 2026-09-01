@@ -49,7 +49,9 @@ cp "$HERE/tleap.in" "$HERE/make_tleap.py" "$HERE/fix_caps.py" "$HERE/check_place
 # SLURM starts a job in the *submission* directory, so the build dir must be self-contained:
 # everything for steps 3-5 is submitted from here, beside the system.prmtop it reads.
 cp "$HERE/02_equilibrate.py" "$HERE/03_production.py" "$HERE/04_analyze.py" \
-   "$HERE/submit_equilibrate.sbatch" "$HERE/submit_production.sbatch" \
+   "$HERE/check_equilibration.py" \
+   "$HERE/submit_equilibrate.sbatch" "$HERE/submit_preproduction.sbatch" \
+   "$HERE/submit_production.sbatch" \
    "$HERE/submit.sh" "$HERE/check_gpu_env.sh" "$HERE/cluster.env.example" "$BUILD/"
 # cluster.env is the single source of the SLURM account/partition/GPU/wall-time. Stage it if it
 # exists so the build directory is self-contained; submit.sh also falls back to the bundle copy,
@@ -148,7 +150,7 @@ cat <<EOF
 Next (steps 3-5 run from the build directory, not from src/):
     cd $BUILD
     ./submit.sh check     # optional GPU pre-flight
-    ./submit.sh all       # equilibration, then production chained with --dependency=afterok
+    ./submit.sh all       # eq -> unrestrained pre-production -> production, chained on afterok
 Cluster account/partition/GPU/wall-time all come from cluster.env; edit that one file, not the
 .sbatch scripts. \`./submit.sh all -n\` prints the sbatch commands without submitting.
 EOF
