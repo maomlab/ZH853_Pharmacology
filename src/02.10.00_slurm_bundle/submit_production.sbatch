@@ -1,25 +1,44 @@
 #!/bin/bash
 #SBATCH --job-name=zh853_prod
 #SBATCH --output=prod_%A_%a.out
-#SBATCH --array=1-3                 # 3 production replicas (SPECIFICATION QC: replicate spread)
-#SBATCH --gres=gpu:1               # TODO(OQ-3): GPU type, e.g. gpu:a100:1
-#SBATCH --partition=gpu            # TODO(OQ-3): partition/queue name
-#SBATCH --account=CHANGEME         # TODO(OQ-3): allocation/account
-#SBATCH --time=48:00:00            # TODO(OQ-3): wall-time limit
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#
+# Step 4: restraint-free production, one replica per array task. Submit with the wrapper, from the
+# BUILD DIRECTORY, after step 3 has finished:
+#
+#     ./submit.sh prod          # or: ./submit.sh all   (chains eq -> prod with afterok)
+#
+# Account, partition, GPU, wall-time and the array size (ZH_REPLICAS, SPECIFICATION QC wants >=3
+# for a replicate spread) are NOT set here on purpose -- they live in cluster.env and submit.sh
+# passes them as sbatch command-line flags, which override any #SBATCH directive.
+#
+# Reads ${ZH_SYS}_eq.xml, written by submit_equilibrate.sbatch.
 
 set -euo pipefail
-module purge
-# TODO(OQ-3): module load cuda/<version>   # match environment-cluster.yml build
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate zh853mor-sim
 
-SYS=${SYS:-system}                 # basename of prmtop/rst7 and eq state
-REP=${SLURM_ARRAY_TASK_ID:-1}
+# Exported by submit.sh so the job picks up the same settings the submission used.
+if [ -n "${ZH_CLUSTER_ENV:-}" ] && [ -f "${ZH_CLUSTER_ENV}" ]; then
+  # shellcheck disable=SC1090
+  source "${ZH_CLUSTER_ENV}"
+fi
+
+module purge
+if [ -n "${ZH_MODULES:-}" ]; then
+  # shellcheck disable=SC2086 -- ZH_MODULES is a space-separated module list
+  module load ${ZH_MODULES}
+fi
+
+source "${ZH_CONDA_SH:-$(conda info --base)/etc/profile.d/conda.sh}"
+conda activate "${ZH_SIM_ENV:-zh853mor-sim}"
+
+SYS="${ZH_SYS:-system}"          # basename of prmtop/rst7 and the equilibrated state
+REP="${SLURM_ARRAY_TASK_ID:-1}"  # replica index, also the RNG seed
+NS="${ZH_PROD_NS:-500}"
+
+echo "host: $(hostname)  job: ${SLURM_JOB_ID:-none}  replica: ${REP}  ${NS} ns"
+python -c "import openmm; print('openmm', openmm.version.version)"
 
 python 03_production.py \
   --prmtop "${SYS}.prmtop" \
   --state  "${SYS}_eq.xml" \
   --out    "prod_r${REP}" \
-  --ns 500 --seed "${REP}"
+  --ns "${NS}" --seed "${REP}"

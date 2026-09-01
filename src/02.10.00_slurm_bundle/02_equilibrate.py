@@ -5,7 +5,12 @@ Adapts the CHARMM-GUI membrane-equilibration schedule: strong positional restrai
 and lipid heavy atoms, released over six stages (NVT then NPT), before free production. Input is
 an Amber system (prmtop/rst7) from PACKMOL-Memgen + tleap.
 
-Usage: python 02_equilibrate.py --prmtop system.prmtop --inpcrd system.rst7 --out eq
+Normally submitted as step 3 via `sbatch submit_equilibrate.sbatch` from the build directory
+(intermediate/02.10.00_build/<D250>_<timestamp>/), not invoked by hand. To run it directly, do so
+from that same directory and keep the `system_eq` output basename -- submit_production.sbatch
+reads back `${SYS}_eq.xml`, so `--out eq` would strand step 4:
+
+    python 02_equilibrate.py --prmtop system.prmtop --inpcrd system.rst7 --out system_eq
 """
 
 from __future__ import annotations

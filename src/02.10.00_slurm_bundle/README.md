@@ -1,9 +1,23 @@
 # ZH853–MOR MD SLURM bundle
 
 Self-contained membrane-MD workflow for the MOR–ZH853 (+Gi) complex, to run on an academic
-SLURM/GPU cluster. Prepared locally in Phase 2; **cluster-specific values are marked `# TODO(OQ-3)`**
-(GPU type, partition, wall-time, account, module/conda paths) and must be filled from the cluster
-specs before submission.
+SLURM/GPU cluster. Prepared locally in Phase 2.
+
+**All cluster-specific values live in one file: `cluster.env`** (account, partition, GPU type,
+wall-times, replica count, modules, conda env names). Copy the template and fill in the two
+required fields before anything is submitted:
+
+```bash
+cp cluster.env.example cluster.env
+$EDITOR cluster.env          # ZH_ACCOUNT and ZH_PARTITION are the only ones with no default
+```
+
+`cluster.env` is gitignored — it is per-cluster and per-user, so it must not travel with the repo;
+`cluster.env.example` is the tracked template. `submit.sh` reads it and passes the values to
+`sbatch` as **command-line flags**, which take precedence over `#SBATCH` directives in a job
+script. That is why the `.sbatch` files carry no account or partition of their own: there is one
+source of truth per cluster rather than a `CHANGEME` in each job script, duplicated again into
+every timestamped build directory.
 
 ## Inputs (copy from the repo)
 - `intermediate/02.05.00_oriented/receptorR_oriented.pdb` — rebuilt receptor (Phase 2), superposed
@@ -41,15 +55,25 @@ newest `openmm` that `openmmforcefields` requires):
 | `zh853mor-plumed` | `environment-plumed.yml` | metadynamics (3.9) | GPU; older openmm + openmm-plumed; optional |
 
 ## Workflow (run in order)
-| Step | Script | Env | Where |
-|------|--------|-----|-------|
-| 0 | `00_install.sh` | — | login node (builds the envs) |
-| 0.5 | `check_gpu_env.sh` | `zh853mor-sim` | **GPU (pre-flight)** |
-| 1 | `ligand_resp/run_resp.sh` | `zh853mor-prep` | CPU |
-| 2 | `01_build_system.sh` | `zh853mor-prep` | CPU |
-| 2a | `check_placement.py` | `zh853mor-prep` | CPU (called by step 2) |
-| 2b | `check_piercing.py` | `zh853mor-prep` | CPU (called by step 2) |
-| 2c | `make_tleap.py` | `zh853mor-prep` | CPU (called by step 2) |
+
+Steps 0–2 are run **from this directory** (`src/02.10.00_slurm_bundle/`) on the login/CPU node.
+Steps 3–5 are run **from the build directory** that step 2 creates — `01_build_system.sh` copies
+the run scripts and `.sbatch` files in there, so each build is a self-contained run directory that
+you `cd` into and submit from. Nothing in steps 3–5 is invoked out of `src/`.
+
+| Step | Script | Env | Where | Run from |
+|------|--------|-----|-------|----------|
+| 0 | `00_install.sh` | — | login node (builds the envs) | `src/02.10.00_slurm_bundle/` |
+| 0.5 | `./submit.sh check` → `check_gpu_env.sh` | `zh853mor-sim` | **GPU (pre-flight)** | either |
+| 1 | `ligand_resp/run_resp.sh` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
+| 2 | `01_build_system.sh` | `zh853mor-prep` | CPU | `src/02.10.00_slurm_bundle/` |
+| 2a | `check_placement.py` | `zh853mor-prep` | CPU (called by step 2) | — |
+| 2b | `check_piercing.py` | `zh853mor-prep` | CPU (called by step 2) | — |
+| 2c | `fix_caps.py` | `zh853mor-prep` | CPU (called by step 2) | — |
+| 2d | `make_tleap.py` | `zh853mor-prep` | CPU (called by step 2) | — |
+| 3 | `./submit.sh eq` → `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU | the build directory |
+| 4 | `./submit.sh prod` → `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU | the build directory |
+| 5 | `04_analyze.py` | `zh853mor-sim` | CPU | the build directory |
 
 ### Building the system (step 2)
 
@@ -146,9 +170,103 @@ Two post-build steps then run automatically:
     clashes across the periodic seam) and aborts. `python make_tleap.py --diagnose
     bilayer_system.pdb` prints every candidate and this verdict without building anything.
     Convergence context: `grep -nE "STOP|SUCCESS|Maximum violation" packmol.log`.
-| 3 | `submit_equilibrate.sbatch` → `02_equilibrate.py` | `zh853mor-sim` | GPU |
-| 4 | `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU |
-| 5 | `04_analyze.py` | `zh853mor-sim` | CPU |
+
+### Running the simulation (steps 3–5)
+
+> **Check what you built before spending GPU time.** `tleap.in` never combines `LIG` into `sys`
+> (see the OPEN note at the top), so a build made from the receptor-only `receptorR_oriented.pdb`
+> is **apo** — no ZH853, no Gi — and step 5's `resname LIG` selection will be empty. `make_tleap.py`
+> warns about this during step 2. Confirm before submitting:
+> ```bash
+> python -c "import parmed; print(sorted({r.name for r in parmed.load_file('system.prmtop').residues}))"
+> ```
+> If no ligand residue name (`ZH8`/`LIG`/…) appears, the trajectory cannot answer Objectives 1–2 and
+> only the receptor dynamics are usable.
+
+**Everything below runs from the build directory**, e.g.
+`intermediate/02.10.00_build/ASP_20260825_154710/`. Step 2 stages `02_equilibrate.py`,
+`03_production.py`, `04_analyze.py` and both `.sbatch` files there next to `system.prmtop`, so the
+paths inside the sbatch scripts are all bare filenames and the job's working directory is the run
+directory. Do not submit from `src/` and do not point `--prmtop` across directories: the analysis
+and checkpoint outputs are written relative to the CWD and belong with the build they came from.
+
+```bash
+cd intermediate/02.10.00_build/ASP_20260825_154710
+
+./submit.sh check     # step 0.5  short GPU pre-flight (openmm on CUDA) -> gpucheck_<jid>.out
+./submit.sh all       # steps 3+4 equilibration, then production chained with afterok
+```
+
+or one stage at a time, to inspect `system_eq.pdb` in between:
+
+```bash
+./submit.sh eq        # step 3 -> system_eq.xml, system_eq.pdb
+./submit.sh prod      # step 4 -> prod_r{1,2,3}.dcd  (only after eq has finished)
+```
+
+Add `-n` to any of these to print the `sbatch` command without submitting. `submit.sh all` chains
+the two with `--dependency=afterok:` — not `afterany` — because production loads the state
+equilibration writes, so a failed or cancelled step 3 must not launch replicas that would die on a
+missing `.xml`. The wrapper also checks that `system.prmtop`/`system.rst7` are actually in the
+current directory and that `ZH_ACCOUNT`/`ZH_PARTITION` are set, so a wrong directory or an unfilled
+`cluster.env` fails immediately with a pointer, rather than as a queued job that dies minutes later
+or an `Invalid account` rejection with no indication of which file to edit.
+
+Then, once production finishes (CPU is fine, one call per replica):
+
+```bash
+python 04_analyze.py --top system.prmtop --traj prod_r1.dcd --lig LIG --out qc_r1
+```
+
+**The file naming is load-bearing.** Both job scripts key off `ZH_SYS` (default `system`, matching
+what tleap writes) and equilibration writes `${ZH_SYS}_eq.xml`, which is exactly what
+`submit_production.sbatch` reads back. Passing `--out eq` when calling `02_equilibrate.py` by hand
+produces `eq.xml` and the production job will then fail to find `system_eq.xml`. Prefer the wrapper;
+if you do run a stage manually, keep the `system_eq` basename:
+
+```bash
+python 02_equilibrate.py --prmtop system.prmtop --inpcrd system.rst7 --out system_eq
+```
+
+Wall-time: equilibration is 1.125 M steps at 2 fs (2.25 ns over six restrained stages); production
+is `ZH_PROD_NS` (500) ns/replica at 4 fs with HMR. Size `ZH_EQ_TIME`/`ZH_PROD_TIME` from the ns/day
+your GPU reports in `prod_r*.log` — the 12 h / 48 h in the template are only a starting guess, and
+production will need restarting from `prod_r<N>.chk` if it does not fit.
+
+### cluster.env reference
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `ZH_ACCOUNT` | *(required)* | allocation to charge — `sacctmgr show assoc user=$USER` |
+| `ZH_PARTITION` | *(required)* | GPU queue — `sinfo -s` |
+| `ZH_GRES` | `gpu:1` | pin the model (`gpu:a100:1`) if the partition is mixed |
+| `ZH_CPUS` / `ZH_MEM` | `8` / `32G` | |
+| `ZH_EQ_TIME` / `ZH_PROD_TIME` / `ZH_CHECK_TIME` | `12:00:00` / `48:00:00` / `00:05:00` | |
+| `ZH_QOS` / `ZH_CONSTRAINT` / `ZH_EXTRA_SBATCH` | empty | passed through to `sbatch` when set |
+| `ZH_REPLICAS` / `ZH_PROD_NS` | `3` / `500` | array size and ns per replica |
+| `ZH_MODULES` | empty | normally stays empty — see CUDA / modules below |
+| `ZH_CONDA_SH` | `$(conda info --base)/…` | set only if conda is not on `PATH` in the job |
+| `ZH_SIM_ENV` / `ZH_PREP_ENV` | `zh853mor-sim` / `zh853mor-prep` | |
+| `ZH_SYS` | `system` | basename of the tleap products |
+
+`submit.sh` looks for `cluster.env` in `$ZH_CLUSTER_ENV`, then the current (build) directory, then
+beside itself in `src/02.10.00_slurm_bundle/` — so filling in the bundle copy once covers every
+build, and a build directory may override it with a local copy for a one-off (a longer wall-time,
+a different partition) without touching the shared file. The resolved path is exported into the
+job, so the job body reads the same settings the submission used.
+
+### Applying this to an existing build
+
+Builds made before the run scripts were staged automatically will not have them. Copy them in:
+
+```bash
+cd intermediate/02.10.00_build/ASP_20260825_154710
+cp ../../../src/02.10.00_slurm_bundle/{02_equilibrate.py,03_production.py,04_analyze.py} .
+cp ../../../src/02.10.00_slurm_bundle/{submit_equilibrate,submit_production}.sbatch .
+cp ../../../src/02.10.00_slurm_bundle/{submit.sh,check_gpu_env.sh} .
+```
+
+`cluster.env` need not be copied — `submit.sh` falls back to the bundle's copy.
 
 ## CUDA / modules
 OpenMM (conda-forge) bundles its own CUDA runtime, so it needs only the node's NVIDIA **driver** —
@@ -164,7 +282,7 @@ PTX ISA it emits — not the `cuda-nvrtc` installed beside it. The driver accept
 rejected 9.3+ (probed via raw `cuModuleLoadData`), so the working build is pinned exactly in
 `environment-cluster.yml`; if CUDA breaks again after a solver upgrade, re-probe the boundary and
 re-pick the hash. Before the first real
-run, submit the pre-flight **`sbatch check_gpu_env.sh`** (step 0.5): it prints the
+run, submit the pre-flight **`./submit.sh check`** (step 0.5): it prints the
 modules/`nvidia-smi`/env, runs `openmm.testInstallation`, and does a real 200-step CUDA run,
 ending in a clear **PASS/FAIL** with a fix checklist. If the JIT compiler itself is not found,
 `export OPENMM_CUDA_COMPILER=$(which nvcc)`.

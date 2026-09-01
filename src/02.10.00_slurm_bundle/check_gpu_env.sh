@@ -1,18 +1,24 @@
 #!/bin/bash
 #SBATCH --job-name=zh853_gpucheck
 #SBATCH --output=gpucheck_%j.out
-#SBATCH --gres=gpu:1               # TODO(OQ-3): GPU type, e.g. gpu:a100:1
-#SBATCH --partition=gpu            # TODO(OQ-3): partition/queue
-#SBATCH --account=CHANGEME         # TODO(OQ-3): allocation/account
-#SBATCH --time=00:05:00
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
 #
-# Pre-flight diagnostic: confirms a GPU node + the zh853mor-sim env can actually run OpenMM on
-# CUDA, BEFORE you spend a real equilibration/production job finding out it can't.
-#   sbatch check_gpu_env.sh          # submit as a short GPU job
-#   bash   check_gpu_env.sh          # or run directly on an interactive GPU node
+# Pre-flight diagnostic (step 0.5): confirms a GPU node + the zh853mor-sim env can actually run
+# OpenMM on CUDA, BEFORE you spend a real equilibration/production job finding out it can't.
+#
+#   ./submit.sh check                # submit as a short GPU job (reads cluster.env)
+#   bash check_gpu_env.sh            # or run directly on an interactive GPU node
+#
+# Account/partition/GPU/time are not #SBATCH directives here on purpose -- they live in
+# cluster.env and submit.sh passes them on the sbatch command line. Submitting this file with a
+# bare `sbatch` inherits your site defaults and may well land on a node with no GPU, which is
+# exactly the failure this script exists to distinguish from a broken environment.
+#
 # Intentionally does NOT `set -e`: every check runs so you see the full picture.
+
+if [ -n "${ZH_CLUSTER_ENV:-}" ] && [ -f "${ZH_CLUSTER_ENV}" ]; then
+  # shellcheck disable=SC1090
+  source "${ZH_CLUSTER_ENV}"
+fi
 
 echo "=== ZH853 GPU environment check ==="
 echo "host: $(hostname)    date: $(date)"
@@ -30,9 +36,10 @@ else
 fi
 echo
 
-echo "--- conda env (zh853mor-sim) ---"
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate zh853mor-sim || echo "WARNING: could not activate zh853mor-sim (run 00_install.sh?)"
+SIM_ENV="${ZH_SIM_ENV:-zh853mor-sim}"
+echo "--- conda env ($SIM_ENV) ---"
+source "${ZH_CONDA_SH:-$(conda info --base)/etc/profile.d/conda.sh}"
+conda activate "$SIM_ENV" || echo "WARNING: could not activate $SIM_ENV (run 00_install.sh?)"
 echo "python: $(which python)"
 conda list 2>/dev/null | grep -E "^(openmm|openmmforcefields|cuda-version|cudatoolkit) " || true
 echo

@@ -5,8 +5,12 @@ Restraint-free NPT production with a semi-isotropic membrane barostat and hydrog
 repartitioning (4 fs). Resumes from the equilibrated state; writes DCD + checkpoints + a
 state-data log. Run one instance per replica (distinct --seed / --out).
 
-Usage: python 03_production.py --prmtop system.prmtop --state eq.xml --out prod_r1 \
-                               --ns 500 --seed 1
+Normally submitted as step 4 via `sbatch submit_production.sbatch` (a 1-3 job array, one replica
+per task) from the build directory, after step 3 has written the equilibrated state. To run one
+replica by hand, from that same directory:
+
+    python 03_production.py --prmtop system.prmtop --state system_eq.xml --out prod_r1 \
+                            --ns 500 --seed 1
 """
 
 from __future__ import annotations

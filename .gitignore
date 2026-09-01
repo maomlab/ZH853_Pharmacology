@@ -38,6 +38,10 @@ src/02.10.00_slurm_bundle/*.pdb
 src/02.10.00_slurm_bundle/*.inp
 src/02.10.00_slurm_bundle/*.json
 src/02.10.00_slurm_bundle/*.prmtop
+
+# Filled-in SLURM account/partition/wall-time: per-cluster and per-user, so it is NOT tracked.
+# The template (cluster.env.example) is. See the bundle README.
+src/02.10.00_slurm_bundle/cluster.env
 src/02.10.00_slurm_bundle/*.rst7
 src/02.10.00_slurm_bundle/*.crd
 src/02.10.00_slurm_bundle/*.xml

@@ -6,7 +6,12 @@ per-residue RMSF (pre-aligned), receptor-aligned ligand RMSD, key-contact occupa
 membrane area-per-lipid. Emits a JSON summary + PNG per replica. Concatenate replicas for
 error bars. Reuses no repo imports so it can run alone on the cluster.
 
-Usage: python 04_analyze.py --top system.prmtop --traj prod_r1.dcd --lig LIG --out qc_r1
+Step 5; run from the build directory, once per replica (CPU is fine):
+
+    python 04_analyze.py --top system.prmtop --traj prod_r1.dcd --lig LIG --out qc_r1
+
+`--lig` must match the ligand residue name in the prmtop (the residue name in ZH853.mol2), and
+`--receptor` the receptor selection; both are empty selections on an apo build.
 """
 
 from __future__ import annotations
