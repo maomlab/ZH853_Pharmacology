@@ -45,7 +45,7 @@ def restraint_force(system, prmtop, positions, sel_backbone, sel_sidechain, sel_
         if atom.element is None or atom.element == app.element.hydrogen:
             continue
         i = atom.index
-        res = atom.residue.name
+        res = atom.residue.name.strip().upper()
         if res in LIPID_RESN:
             grp = "lipid"
         elif atom.name in ("N", "CA", "C", "O"):
@@ -76,7 +76,7 @@ LIPID_RESN = {
     # Lipid21 cholesterol
     "CHL",
 }
-SOLVENT_RESN = {"WAT", "HOH", "OPC", "NA", "CL", "K", "TIP3", "SOL", "Na+", "Cl-"}
+SOLVENT_RESN = {"WAT", "HOH", "OPC", "TIP3", "SOL", "NA", "CL", "K", "NA+", "CL-", "K+"}
 
 
 def main() -> None:
@@ -100,7 +100,7 @@ def main() -> None:
     force, groups = restraint_force(system, prmtop, inpcrd.positions, "N CA C O", "sc", "lipid")
     # If a lipid residue name is not in LIPID_RESN it lands in `sidechain` and gets the wrong
     # restraint ramp, silently. Print the census (and the residue names behind it) so that shows up.
-    resnames = sorted({a.residue.name for a in prmtop.topology.atoms()})
+    resnames = sorted({a.residue.name.strip().upper() for a in prmtop.topology.atoms()})
     print("restraint groups: " + ", ".join(f"{g}={len(v)}" for g, v in groups.items()), flush=True)
     print("  lipid residues seen: "
           + (", ".join(r for r in resnames if r in LIPID_RESN) or "NONE"), flush=True)

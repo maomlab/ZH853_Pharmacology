@@ -58,6 +58,16 @@ TM_HALF_A = 15.0               # |z - midplane| defining the membrane-embedded C
 # residues. Nothing else in this system contains P.
 STEROL_RESN = {"CHL", "CHL1", "CLR", "CHOL", "CHO"}
 WATER_RESN = {"WAT", "HOH", "OPC", "TIP3", "SOL"}
+ION_RESN = {"NA", "CL", "K", "NA+", "CL-", "K+", "MG", "CA2", "ZN"}
+
+# Atom NAMES are the least portable thing in a prmtop and have now bitten twice: Lipid21 calls the
+# phosphatidylcholine phosphorus `P31`, not `P`, and MDAnalysis reports empty elements for this
+# topology ("Unknown ATOMIC_NUMBER"), so neither `name P` nor `element P` finds it. Masses are
+# always present and unambiguous, so select on those. HMR does not perturb this: it is applied when
+# OpenMM builds the System, never written back to the prmtop, and phosphorus carries no hydrogens
+# anyway. Windows are tight enough to exclude the neighbours -- Na 22.99, S 32.06, Cl 35.45.
+MASS_P = (30.5, 31.5)
+MASS_O = (15.5, 16.5)
 
 
 class Report:
@@ -135,7 +145,7 @@ def leaflet_counts(u, phos, midplane_z):
     zp = phos.positions[:, 2]
     up, lo = int((zp >= midplane_z).sum()), int((zp < midplane_z).sum())
     for r in u.residues:
-        if r.resname.strip() in STEROL_RESN:
+        if r.resname.strip().upper() in STEROL_RESN:
             if r.atoms.positions[:, 2].mean() >= midplane_z:
                 up += 1
             else:
@@ -231,14 +241,30 @@ def main() -> int:
         return 2
 
     ca = u.select_atoms("name CA")            # lipids/water carry no CA, so this is the protein
-    phos = u.select_atoms("name P")   # one per phospholipid; see the note by STEROL_RESN
-    prot = u.select_atoms("protein") if len(u.select_atoms("protein")) else ca
-    wat_o = u.select_atoms(f"resname {' '.join(WATER_RESN)} and name O OW O1")
+    # One phosphorus per phospholipid, found by mass rather than by name (see MASS_P above).
+    phos = u.select_atoms(f"prop mass > {MASS_P[0]} and prop mass < {MASS_P[1]}")
+    prot = u.select_atoms("protein")
+    if not len(prot):
+        # `protein` keys off a built-in resname list that may not know CYX/HID/ASH. Fall back to
+        # "everything that is not solvent, ion or lipid" rather than to CA alone, which would
+        # under-count the protein cross-section and the core-water proximity test.
+        skip = WATER_RESN | ION_RESN | STEROL_RESN | {"PC", "PE", "PS", "PA", "OL", "ST", "MY",
+                                                      "LAL", "DHA", "SA", "PGR", "POPC", "POPE"}
+        prot = u.atoms[[a.index for a in u.atoms
+                        if a.residue.resname.strip().upper() not in skip]]
+    water = u.select_atoms(f"resname {' '.join(sorted(WATER_RESN))}")
+    wat_o = water.select_atoms(f"prop mass > {MASS_O[0]} and prop mass < {MASS_O[1]}") \
+        if len(water) else water
     sg = u.select_atoms("name SG")
+    print(f"selections: {len(phos)} phosphorus, {len(ca)} CA, {len(prot)} protein atoms, "
+          f"{len(wat_o)} waters, {len(sg)} SG")
     lig = u.select_atoms("") if args.lig.lower() == "apo" else u.select_atoms(f"resname {args.lig}")
 
     if not len(phos):
         print("ERROR: no phosphorus atoms found; is this a bilayer?", file=sys.stderr)
+        print("  Selection is by mass "
+              f"({MASS_P[0]}-{MASS_P[1]} amu), so this is not an atom-naming problem -- the "
+              "topology genuinely has no P.", file=sys.stderr)
         print("  Residues present (name x count):", file=sys.stderr)
         for name, n in residue_census(u):
             print(f"    {name:<6} {n}", file=sys.stderr)
@@ -255,7 +281,7 @@ def main() -> int:
     tm_mask = None
     n_up, n_lo = leaflet_counts(u, phos, float(phos.positions[:, 2].mean()))
     per_leaflet = max((n_up + n_lo) / 2.0, 1.0)
-    n_sterol = sum(1 for r in u.residues if r.resname.strip() in STEROL_RESN)
+    n_sterol = sum(1 for r in u.residues if r.resname.strip().upper() in STEROL_RESN)
     print(f"lipids: {n_up + n_lo} molecules ({len(phos)} phospholipid + {n_sterol} sterol; "
           f"{n_up} upper / {n_lo} lower), {per_leaflet:g} per leaflet")
     print(f"residues: " + ", ".join(f"{k} x{v}" for k, v in residue_census(u, 8)) + "\n")

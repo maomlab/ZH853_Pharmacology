@@ -345,8 +345,12 @@ if a membrane number looks wrong.
 prmtop: each phospholipid is split into a headgroup plus one residue per acyl chain (POPC =
 `PC` + `PA` + `OL`), and cholesterol is `CHL` — `CHL1` is only what packmol-memgen calls it on the
 way *in*. The build-time checks read the packed PDB and so never see this; anything reading the
-prmtop does. Lipids are therefore counted naming-agnostically, as **molecules**: one phosphorus per
-phospholipid plus sterol residues. Counting residues instead would treat one POPC as three lipids
+prmtop does. Nor is the phosphorus called `P` — Lipid21 names it `P31` — and MDAnalysis reports *empty element
+records* for this prmtop ("Unknown ATOMIC_NUMBER"), so neither `name P` nor `element P` finds it.
+Selections that matter are therefore made on **mass**, which a prmtop always carries and which no
+force field renames (HMR is applied when OpenMM builds the System and never written back, and
+phosphorus carries no hydrogens regardless). Lipids are counted naming-agnostically, as
+**molecules**: one phosphorus per phospholipid plus sterol residues. Counting residues instead would treat one POPC as three lipids
 and put the area per lipid out by 3×, turning a healthy membrane into a hard FAIL.
 Density and box matter more than usual for this build: `make_tleap.py` may have fallen back to the
 packed extent + 2 × 1.25 Å (it says so loudly), and that is exactly the case where the barostat has
