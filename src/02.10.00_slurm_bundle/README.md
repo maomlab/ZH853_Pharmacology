@@ -12,6 +12,16 @@ cp cluster.env.example cluster.env
 $EDITOR cluster.env          # ZH_ACCOUNT and ZH_PARTITION are the only ones with no default
 ```
 
+**Every GPU stage refuses to run without it.** `cluster_env.sh` is the single loader that
+`submit.sh`, all three `.sbatch` files and `check_gpu_env.sh` source; if `cluster.env` is absent it
+prints where it looked and exits non-zero rather than falling back to built-in defaults. That
+fallback is the failure worth preventing: the job would activate a different conda env, or run under
+a different system basename, or for a different number of ns — and still exit 0 looking like it
+worked. The pre-flight has the sharpest version of this, since it would otherwise report PASS for an
+environment the real runs never use. The lone exception is `01_build_system.sh`, which needs no SLURM
+settings at all and continues with a note, so a system can be built before the cluster values are
+known.
+
 `cluster.env` is gitignored — it is per-cluster and per-user, so it must not travel with the repo;
 `cluster.env.example` is the tracked template. `submit.sh` reads it and passes the values to
 `sbatch` as **command-line flags**, which take precedence over `#SBATCH` directives in a job
@@ -304,11 +314,11 @@ production will need restarting from `prod_r<N>.chk` if it does not fit.
 | `ZH_PROD_STATE` | empty | force the state production resumes from |
 | `ZH_MODULES` | empty | normally stays empty — see CUDA / modules below |
 | `ZH_CONDA_SH` | `$(conda info --base)/…` | set only if conda is not on `PATH` in the job |
-| `ZH_SIM_ENV` / `ZH_PREP_ENV` | `zh853mor-sim` / `zh853mor-prep` | |
+| `ZH_SIM_ENV` / `ZH_PREP_ENV` | `zh853mor-sim` / `zh853mor-prep` | conda envs for the GPU stages / the build |
 | `ZH_SYS` | `system` | basename of the tleap products |
 
-`submit.sh` looks for `cluster.env` in `$ZH_CLUSTER_ENV`, then the current (build) directory, then
-beside itself in `src/02.10.00_slurm_bundle/` — so filling in the bundle copy once covers every
+`cluster_env.sh` looks for `cluster.env` in `$ZH_CLUSTER_ENV`, then the current (build) directory,
+then `$SLURM_SUBMIT_DIR`, then beside itself in `src/02.10.00_slurm_bundle/` — so filling in the bundle copy once covers every
 build, and a build directory may override it with a local copy for a one-off (a longer wall-time,
 a different partition) without touching the shared file. The resolved path is exported into the
 job, so the job body reads the same settings the submission used.
@@ -321,7 +331,7 @@ Builds made before the run scripts were staged automatically will not have them.
 cd intermediate/02.10.00_build/ASP_20260825_154710
 cp ../../../src/02.10.00_slurm_bundle/{02_equilibrate.py,03_production.py,04_analyze.py} .
 cp ../../../src/02.10.00_slurm_bundle/{submit_equilibrate,submit_preproduction,submit_production}.sbatch .
-cp ../../../src/02.10.00_slurm_bundle/{submit.sh,check_gpu_env.sh,check_equilibration.py,check_piercing.py} .
+cp ../../../src/02.10.00_slurm_bundle/{submit.sh,cluster_env.sh,check_gpu_env.sh,check_equilibration.py,check_piercing.py} .
 ```
 
 `cluster.env` need not be copied — `submit.sh` falls back to the bundle's copy.

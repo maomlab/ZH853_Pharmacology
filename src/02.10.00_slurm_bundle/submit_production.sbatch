@@ -16,11 +16,10 @@
 
 set -euo pipefail
 
-# Exported by submit.sh so the job picks up the same settings the submission used.
-if [ -n "${ZH_CLUSTER_ENV:-}" ] && [ -f "${ZH_CLUSTER_ENV}" ]; then
-  # shellcheck disable=SC1090
-  source "${ZH_CLUSTER_ENV}"
-fi
+# cluster.env is REQUIRED: running on built-in defaults would use a different conda env and a
+# different system basename and still exit 0. cluster_env.sh fails loudly instead.
+# shellcheck source=cluster_env.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/cluster_env.sh" || exit 1
 
 module purge
 if [ -n "${ZH_MODULES:-}" ]; then

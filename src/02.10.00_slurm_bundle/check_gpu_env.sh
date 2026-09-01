@@ -15,10 +15,11 @@
 #
 # Intentionally does NOT `set -e`: every check runs so you see the full picture.
 
-if [ -n "${ZH_CLUSTER_ENV:-}" ] && [ -f "${ZH_CLUSTER_ENV}" ]; then
-  # shellcheck disable=SC1090
-  source "${ZH_CLUSTER_ENV}"
-fi
+# cluster.env is REQUIRED here too, and for a sharper reason than elsewhere: this is the
+# pre-flight. Falling back to defaults would test a DIFFERENT conda env from the one the real runs
+# use, and report PASS for it -- the exact failure this script exists to catch.
+# shellcheck source=cluster_env.sh
+source "${SLURM_SUBMIT_DIR:-$PWD}/cluster_env.sh" || exit 1
 
 echo "=== ZH853 GPU environment check ==="
 echo "host: $(hostname)    date: $(date)"

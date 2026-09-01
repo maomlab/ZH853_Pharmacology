@@ -40,20 +40,11 @@ done
 [ -n "$STAGE" ] || { echo "ERROR: no stage given." >&2; usage 1; }
 
 # --- locate and load cluster.env --------------------------------------------------------------
-# Explicit override, then the build dir we were invoked from, then the bundle's own copy.
-ENV_FILE=""
-for cand in "${ZH_CLUSTER_ENV:-}" "$PWD/cluster.env" "$HERE/cluster.env"; do
-  if [ -n "$cand" ] && [ -f "$cand" ]; then ENV_FILE="$(cd "$(dirname "$cand")" && pwd)/$(basename "$cand")"; break; fi
-done
-if [ -z "$ENV_FILE" ]; then
-  echo "ERROR: no cluster.env found (looked in \$ZH_CLUSTER_ENV, $PWD, $HERE)." >&2
-  echo "  Create one from the template -- it is gitignored, so it is per-machine and per-user:" >&2
-  echo "      cp $HERE/cluster.env.example $HERE/cluster.env && \$EDITOR $HERE/cluster.env" >&2
-  exit 1
-fi
-# shellcheck disable=SC1090
-source "$ENV_FILE"
-echo "cluster settings: $ENV_FILE"
+# Shared with the job scripts so there is one definition of where cluster.env lives and one error
+# message when it is absent. It exits non-zero rather than falling back to defaults.
+# shellcheck source=cluster_env.sh
+source "$HERE/cluster_env.sh" || exit 1
+ENV_FILE="$ZH_CLUSTER_ENV"
 
 # --- validate ---------------------------------------------------------------------------------
 # Fail here, with a pointer to the file to edit, rather than letting sbatch reject the job with

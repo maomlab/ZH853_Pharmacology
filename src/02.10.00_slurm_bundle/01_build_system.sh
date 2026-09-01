@@ -6,11 +6,19 @@
 # env's AMBERHOME and breaks tool discovery (packmol-memgen: "reduce not available").
 #   module unload amber cuda cudnn 2>/dev/null || true
 set -euo pipefail
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate zh853mor-prep   # AmberTools / PACKMOL-Memgen / obabel / reduce live here
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
+# The one script that does NOT require cluster.env: building the system is a CPU step that needs no
+# SLURM settings, so a build can be made before the cluster values are known. It still reads the
+# file when present, for ZH_PREP_ENV. Every GPU stage requires it -- see cluster_env.sh.
+ZH_ENV_OPTIONAL=1
+# shellcheck source=cluster_env.sh
+source "$HERE/cluster_env.sh" || exit 1
+
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "${ZH_PREP_ENV:-zh853mor-prep}"   # AmberTools / PACKMOL-Memgen / obabel / reduce
 
 # --- build in a PRISTINE directory --------------------------------------------------------
 # packmol-memgen writes to CWD *and reuses whatever it finds there*: the component PDBs
@@ -52,15 +60,13 @@ cp "$HERE/02_equilibrate.py" "$HERE/03_production.py" "$HERE/04_analyze.py" \
    "$HERE/check_equilibration.py" \
    "$HERE/submit_equilibrate.sbatch" "$HERE/submit_preproduction.sbatch" \
    "$HERE/submit_production.sbatch" \
-   "$HERE/submit.sh" "$HERE/check_gpu_env.sh" "$HERE/cluster.env.example" "$BUILD/"
+   "$HERE/submit.sh" "$HERE/check_gpu_env.sh" "$HERE/cluster_env.sh" \
+   "$HERE/cluster.env.example" "$BUILD/"
 # cluster.env is the single source of the SLURM account/partition/GPU/wall-time. Stage it if it
 # exists so the build directory is self-contained; submit.sh also falls back to the bundle copy,
 # so a build made before cluster.env was filled in still works once it is.
 if [ -f "$HERE/cluster.env" ]; then
   cp "$HERE/cluster.env" "$BUILD/"
-else
-  echo "NOTE: $HERE/cluster.env does not exist yet -- create it before step 3:"
-  echo "        cp $HERE/cluster.env.example $HERE/cluster.env && \$EDITOR $HERE/cluster.env"
 fi
 
 # The finalised receptor does NOT arrive with `git pull`: intermediate/ is gitignored, and 02.03.00
