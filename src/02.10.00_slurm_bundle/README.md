@@ -332,11 +332,22 @@ It judges convergence on the **final, least-restrained stage only** (read from
 | Thermodynamics | density (0.98–1.10 g/mL) and its drift, temperature (310 ± 2 K), potential-energy drift vs its own σ | FAIL on absolute range, WARN on drift |
 | Box | `Lx`/`Lz` drift between halves of the final stage | WARN |
 | Membrane | area per lipid (55–70 Å², protein cross-section subtracted via an xy convex hull) and its drift, P–P thickness (34–44 Å) | WARN |
+
 | Packing | waters left in the lipid core, excluding those within 6 Å of the protein; ring piercing on the final frame via `check_piercing.py` | WARN |
 | Protein | Cα RMSD whole (≤3 Å) and membrane-embedded (≤2 Å) vs the staged receptor; C142–C219 SG–SG (1.9–2.3 Å) | FAIL |
 | Registration | vertical drift out of the OPM slab vs frame 0 (≤2 Å) | FAIL |
 
 FAIL means something is physically wrong and exits non-zero; WARN means still relaxing and exits 0.
+The header line prints the lipid inventory and a residue census, which is the first thing to read
+if a membrane number looks wrong.
+
+**Lipid21 is modular, and that trips up the obvious selections.** There is no `POPC` residue in the
+prmtop: each phospholipid is split into a headgroup plus one residue per acyl chain (POPC =
+`PC` + `PA` + `OL`), and cholesterol is `CHL` — `CHL1` is only what packmol-memgen calls it on the
+way *in*. The build-time checks read the packed PDB and so never see this; anything reading the
+prmtop does. Lipids are therefore counted naming-agnostically, as **molecules**: one phosphorus per
+phospholipid plus sterol residues. Counting residues instead would treat one POPC as three lipids
+and put the area per lipid out by 3×, turning a healthy membrane into a hard FAIL.
 Density and box matter more than usual for this build: `make_tleap.py` may have fallen back to the
 packed extent + 2 × 1.25 Å (it says so loudly), and that is exactly the case where the barostat has
 real work to do — so confirm they flatten rather than assuming it.

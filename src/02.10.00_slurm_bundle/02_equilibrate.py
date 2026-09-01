@@ -61,8 +61,22 @@ def restraint_force(system, prmtop, positions, sel_backbone, sel_sidechain, sel_
     return force, groups
 
 
-LIPID_RESN = {"POPC", "CHL1", "CLR", "POPE", "POPS", "PSM", "OL", "PC", "PA"}
-SOLVENT_RESN = {"WAT", "HOH", "OPC", "NA", "CL", "K", "TIP3", "SOL"}
+# Lipid21 is MODULAR: one POPC is three residues -- PC (headgroup) + PA (palmitoyl) + OL (oleoyl)
+# -- and cholesterol is CHL, not CHL1 (CHL1 is what packmol-memgen calls it on the way IN). A
+# lipid residue missing from this set is not an error: it silently falls through to the
+# `sidechain` group and follows the wrong restraint schedule. Hence the group census printed
+# below, so a naming surprise is visible in the job log rather than inferred months later.
+LIPID_RESN = {
+    # whole-lipid names (as packed, and other force fields)
+    "POPC", "POPE", "POPS", "PSM", "CHL1", "CLR", "CHOL",
+    # Lipid21 headgroups
+    "PC", "PE", "PS", "PGR", "PH-", "PSA",
+    # Lipid21 acyl chains
+    "PA", "OL", "ST", "MY", "LAL", "DHA", "SA",
+    # Lipid21 cholesterol
+    "CHL",
+}
+SOLVENT_RESN = {"WAT", "HOH", "OPC", "NA", "CL", "K", "TIP3", "SOL", "Na+", "Cl-"}
 
 
 def main() -> None:
@@ -84,6 +98,17 @@ def main() -> None:
         constraints=app.HBonds, rigidWater=True,
     )
     force, groups = restraint_force(system, prmtop, inpcrd.positions, "N CA C O", "sc", "lipid")
+    # If a lipid residue name is not in LIPID_RESN it lands in `sidechain` and gets the wrong
+    # restraint ramp, silently. Print the census (and the residue names behind it) so that shows up.
+    resnames = sorted({a.residue.name for a in prmtop.topology.atoms()})
+    print("restraint groups: " + ", ".join(f"{g}={len(v)}" for g, v in groups.items()), flush=True)
+    print("  lipid residues seen: "
+          + (", ".join(r for r in resnames if r in LIPID_RESN) or "NONE"), flush=True)
+    unknown = [r for r in resnames
+               if r not in LIPID_RESN and r not in SOLVENT_RESN and len(r) != 3]
+    if unknown:
+        print(f"  NOTE: unrecognised residue names (check they are meant to be restrained as "
+              f"protein): {', '.join(unknown)}", flush=True)
 
     integrator = mm.LangevinMiddleIntegrator(TEMP, 1 / unit.picosecond, DT)
     platform = mm.Platform.getPlatformByName("CUDA")

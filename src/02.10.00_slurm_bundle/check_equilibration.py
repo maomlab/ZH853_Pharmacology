@@ -48,7 +48,15 @@ LIG_RMSD_MAX = 3.0             # A, receptor-aligned ligand drift over the ramp
 CORE_HALF_A = 8.0              # |z - midplane| defining the hydrophobic core
 TM_HALF_A = 15.0               # |z - midplane| defining the membrane-embedded CA set
 
-LIPID_RESN = {"POPC", "CHL1", "CLR", "POPE", "POPS", "PSM"}
+# Lipid21 is MODULAR: it does not have a POPC residue. Each phospholipid is split into a headgroup
+# residue plus one residue per acyl chain -- POPC is PC + PA (palmitoyl) + OL (oleoyl) -- so a
+# `resname POPC` selection matches nothing in the prmtop even though the packed PDB used that name
+# (which is why the build-time checks, which read the PDB, are unaffected). Counting *residues*
+# would also treat one POPC as three lipids and put the area per lipid out by 3x.
+#
+# So molecules are counted naming-agnostically: one phosphorus per phospholipid, plus sterol
+# residues. Nothing else in this system contains P.
+STEROL_RESN = {"CHL", "CHL1", "CLR", "CHOL", "CHO"}
 WATER_RESN = {"WAT", "HOH", "OPC", "TIP3", "SOL"}
 
 
@@ -110,17 +118,29 @@ def halves_drift(x: np.ndarray) -> float:
     return float(np.mean(x[h:]) - np.mean(x[:h]))
 
 
-def leaflet_counts(u, midplane_z):
-    """(upper, lower) lipid counts, split on each lipid's centre of geometry.
+def residue_census(u, limit=14):
+    """(resname, count) by descending count -- what the topology actually contains."""
+    counts = {}
+    for r in u.residues:
+        counts[r.resname.strip()] = counts.get(r.resname.strip(), 0) + 1
+    return sorted(counts.items(), key=lambda kv: -kv[1])[:limit]
 
-    Computed ONCE: lipids do not flip-flop on an equilibration timescale, and re-deriving this
-    per frame means walking every residue in the system (mostly water) on every frame.
+
+def leaflet_counts(u, phos, midplane_z):
+    """(upper, lower) lipid MOLECULE counts: one per phosphorus, plus sterol residues.
+
+    Computed ONCE: lipids do not flip-flop on an equilibration timescale, and re-deriving it per
+    frame means walking every residue in the system (mostly water) on every frame.
     """
-    lipids = [r for r in u.residues if r.resname in LIPID_RESN]
-    if not lipids:
-        return 0, 0
-    zs = np.array([r.atoms.positions[:, 2].mean() for r in lipids])
-    return int((zs >= midplane_z).sum()), int((zs < midplane_z).sum())
+    zp = phos.positions[:, 2]
+    up, lo = int((zp >= midplane_z).sum()), int((zp < midplane_z).sum())
+    for r in u.residues:
+        if r.resname.strip() in STEROL_RESN:
+            if r.atoms.positions[:, 2].mean() >= midplane_z:
+                up += 1
+            else:
+                lo += 1
+    return up, lo
 
 
 def protein_area(prot_pos, midplane_z) -> float | None:
@@ -211,14 +231,17 @@ def main() -> int:
         return 2
 
     ca = u.select_atoms("name CA")            # lipids/water carry no CA, so this is the protein
-    phos = u.select_atoms("resname POPC and name P")
+    phos = u.select_atoms("name P")   # one per phospholipid; see the note by STEROL_RESN
     prot = u.select_atoms("protein") if len(u.select_atoms("protein")) else ca
     wat_o = u.select_atoms(f"resname {' '.join(WATER_RESN)} and name O OW O1")
     sg = u.select_atoms("name SG")
     lig = u.select_atoms("") if args.lig.lower() == "apo" else u.select_atoms(f"resname {args.lig}")
 
     if not len(phos):
-        print("ERROR: no POPC phosphorus atoms found; is this a bilayer?", file=sys.stderr)
+        print("ERROR: no phosphorus atoms found; is this a bilayer?", file=sys.stderr)
+        print("  Residues present (name x count):", file=sys.stderr)
+        for name, n in residue_census(u):
+            print(f"    {name:<6} {n}", file=sys.stderr)
         return 2
 
     ref_ca = mda.Universe(args.receptor).select_atoms("name CA").positions.copy()
@@ -230,9 +253,12 @@ def main() -> int:
     box, apl_g, apl_n, thick, rmsd_all, rmsd_tm, reg, sgd = ([] for _ in range(8))
     lig_rmsd, lig_ref = [], []
     tm_mask = None
-    n_up, n_lo = leaflet_counts(u, float(phos.positions[:, 2].mean()))
+    n_up, n_lo = leaflet_counts(u, phos, float(phos.positions[:, 2].mean()))
     per_leaflet = max((n_up + n_lo) / 2.0, 1.0)
-    print(f"lipids: {n_up + n_lo} ({n_up} upper / {n_lo} lower), {per_leaflet:g} per leaflet\n")
+    n_sterol = sum(1 for r in u.residues if r.resname.strip() in STEROL_RESN)
+    print(f"lipids: {n_up + n_lo} molecules ({len(phos)} phospholipid + {n_sterol} sterol; "
+          f"{n_up} upper / {n_lo} lower), {per_leaflet:g} per leaflet")
+    print(f"residues: " + ", ".join(f"{k} x{v}" for k, v in residue_census(u, 8)) + "\n")
     for ts in u.trajectory:
         lx, ly, lz = ts.dimensions[:3]
         box.append((lx, ly, lz))
