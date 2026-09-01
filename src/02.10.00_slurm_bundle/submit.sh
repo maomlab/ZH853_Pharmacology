@@ -116,28 +116,26 @@ EQ_LOG="${ZH_SYS}_eq.log"
 PROD_LOG="$(_newest 'preprod*.log' 'prod_r*.log')"
 EQ_RATE="$(_speed "$EQ_LOG")"
 PROD_RATE="$(_speed "$PROD_LOG")"
-# If only one rate is known, derive the other: the timestep differs 2x and the step rate is
-# similar, so ns/day scales roughly with dt. Flagged as derived, because restraints and HMR both
-# perturb it -- it is a sighting shot, not a measurement.
-EQ_DERIVED=""; PROD_DERIVED=""
-if [ -z "$EQ_RATE" ] && [ -n "$PROD_RATE" ]; then
-  EQ_RATE="$(awk -v r="$PROD_RATE" 'BEGIN{printf "%.1f", r/2}')"
-  EQ_DERIVED=" derived from the 4 fs rate"; EQ_LOG=""
-fi
-if [ -z "$PROD_RATE" ] && [ -n "$EQ_RATE" ]; then
-  PROD_RATE="$(awk -v r="$EQ_RATE" 'BEGIN{printf "%.1f", r*2}')"
-  PROD_DERIVED=" derived from the 2 fs rate"; PROD_LOG=""
-fi
+# One stage's rate is NOT convertible into the other's. It is tempting to scale by the timestep
+# (2 fs -> 4 fs, so 2x), and this script used to: measured on the H200 nodes the real ratio is
+# 6.2x (94.4 vs 587 ns/day). The timestep is only one factor -- equilibration also carries the
+# restraint force, and it writes an energy-bearing state report every 2,500 steps against
+# production's 25,000, each of which forces a GPU sync and a full energy evaluation. A derived
+# number would have been wrong by 3x while looking authoritative, so an unmeasured stage now
+# reports "not measured" and the other rate is shown only as context.
+if [ -n "$EQ_RATE" ]; then EQ_TXT="${EQ_RATE} ns/day @2fs (${EQ_LOG})"
+else EQ_TXT="2 fs not measured yet"; fi
+if [ -n "$PROD_RATE" ]; then PROD_TXT="${PROD_RATE} ns/day @4fs (${PROD_LOG})"
+else PROD_TXT="4 fs not measured yet"; fi
 if [ -n "$EQ_RATE" ] || [ -n "$PROD_RATE" ]; then
-  echo "measured rate: ${EQ_RATE:-?} ns/day @2fs${EQ_DERIVED:+,$EQ_DERIVED}${EQ_LOG:+ (${EQ_LOG})};" \
-       "${PROD_RATE:-?} ns/day @4fs${PROD_DERIVED:+,$PROD_DERIVED}${PROD_LOG:+ (${PROD_LOG})}"
+  echo "measured rate: ${EQ_TXT}; ${PROD_TXT}"
 else
   echo "measured rate: none yet -- the first completed stage writes a Speed column and calibrates this"
 fi
 
 estimate() {  # <ns> <rate> <walltime> <label>
   local ns="$1" rate="$2" wall="$3" label="$4"
-  [ -n "$rate" ] || { echo "  estimate: unknown until a stage completes here"; return 0; }
+  [ -n "$rate" ] || { echo "  estimate: unknown -- no completed run at this timestep yet"; return 0; }
   local hrs; hrs="$(awk -v n="$ns" -v r="$rate" 'BEGIN{printf "%.3f", 24*n/r}')"
   local wh;  wh="$(_hours "$wall")"
   local pct; pct="$(awk -v h="$hrs" -v w="$wh" 'BEGIN{printf "%.0f", (w>0? 100*h/w : 0)}')"

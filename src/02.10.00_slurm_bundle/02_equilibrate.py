@@ -84,8 +84,13 @@ def main() -> None:
     ap.add_argument("--prmtop", required=True)
     ap.add_argument("--inpcrd", required=True)
     ap.add_argument("--out", default="eq")
-    ap.add_argument("--report-ps", type=float, default=5.0,
-                    help="state-log cadence in ps (energy/T/density/volume)")
+    ap.add_argument("--report-ps", type=float, default=10.0,
+                    help="state-log cadence in ps (energy/T/density/volume). Each report carries "
+                         "energy, which forces a GPU sync and a full energy evaluation, so this "
+                         "is not free: at 5 ps it fires every 2,500 steps against production's "
+                         "25,000 and is part of why equilibration measures ~6x slower per ns "
+                         "rather than the 2x the timestep alone implies. 10 ps still leaves ~50 "
+                         "samples in the final stage, which is ample for the plateau test.")
     ap.add_argument("--dcd-ps", type=float, default=20.0,
                     help="trajectory cadence in ps; frames carry the box, so this sets the "
                          "resolution of the area-per-lipid and thickness traces")

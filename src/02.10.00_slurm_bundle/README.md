@@ -432,12 +432,18 @@ submitted production: 12345   (3 replicas x 500 ns)
            to restart from the checkpoint.
 ```
 
-That warning is why `ZH_PROD_TIME` ships as `72:00:00` rather than 48 — 500 ns per replica needs
-~63 h at 190 ns/day and ~83 h at 145 ns/day, so a 48 h request strands every replica at the
-wall-time to be restarted from `prod_r<N>.chk`. Note that 72 h is not generous: at 190 ns/day it is
-already ~87 % and still trips the warning, so if your measured rate is at or below that, raise it
-to `96:00:00`. The estimate `submit.sh` prints uses your own measured rate — trust that over any
-number quoted here.
+Measured on the H200 nodes for the ~180k-atom apo system (2026-09-01): **94.4 ns/day at 2 fs**
+restrained, **587 ns/day at 4 fs** with HMR — so eq takes ~0.6 h, a 100 ns pre-production leg
+~4.1 h, and 500 ns of production ~20.4 h per replica, about 25 h end to end. `ZH_PROD_TIME` ships
+as `72:00:00`, which is comfortable rather than necessary at that rate; it is kept generous because
+a job that hits the limit loses everything since its last checkpoint, and because the ligand builds
+are larger and will be slower.
+
+**The two rates are not convertible into one another.** The timestep ratio suggests 2×; the
+measured ratio is **6.2×**. Equilibration also carries the restraint force, and it writes an
+energy-bearing state report every 2,500 steps against production's 25,000 — each one forcing a GPU
+sync and a full energy evaluation. So an unmeasured stage reports `not measured` rather than a
+scaled guess, which would have been wrong by 3× while looking authoritative.
 
 **No calibration run is needed.** `StateDataReporter` writes a `Speed (ns/day)` column, so every
 completed stage in the build directory measures this cluster's rate for this system. The estimator
@@ -461,7 +467,7 @@ the queue has `ZH_REPLICAS` GPUs free. A job that hits its limit restarts from `
 | `ZH_PARTITION` | *(required)* | GPU queue — `sinfo -s` |
 | `ZH_GRES` | `gpu:1` | pin the model (`gpu:a100:1`) if the partition is mixed |
 | `ZH_CPUS` / `ZH_MEM` | `8` / `32G` | |
-| `ZH_EQ_TIME` / `ZH_PROD_TIME` / `ZH_CHECK_TIME` | `12:00:00` / `72:00:00` / `00:05:00` | 500 ns/replica needs ~63 h at 190 ns/day; raise to 96 h if the estimate warns |
+| `ZH_EQ_TIME` / `ZH_PROD_TIME` / `ZH_CHECK_TIME` | `12:00:00` / `72:00:00` / `00:05:00` | measured: 500 ns/replica ≈ 20.4 h at 587 ns/day |
 | `ZH_QOS` / `ZH_CONSTRAINT` / `ZH_EXTRA_SBATCH` | empty | passed through to `sbatch` when set |
 | `ZH_REPLICAS` / `ZH_PROD_NS` | `3` / `500` | array size and ns per replica |
 | `ZH_PREPROD_NS` / `ZH_PREPROD_TIME` | `100` / `24:00:00` | unrestrained discard leg (step 3.5) |
