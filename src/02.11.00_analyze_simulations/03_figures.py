@@ -89,13 +89,22 @@ def qc_dashboard(systems, col, out: Path) -> Path:
 
     ax = axes[0, 2]
     drawn = False
+    stale = []
     for s, reps in systems.items():
         stacks, resids = [], None
         for r in reps:
             arr = r.arrays()
-            if "rmsf" in arr and arr["rmsf"].size:
-                stacks.append(arr["rmsf"])
-                resids = arr["resids"]
+            if "rmsf" not in arr or not arr["rmsf"].size:
+                continue
+            # RMSF has one value per Ca, which is NOT one per residue: the ACE/NME caps have
+            # none. `ca_resids` is that axis. Files written before it existed pair a 281-value
+            # RMSF with 283 residue ids, so say what to do rather than raising a shape error.
+            x = arr.get("ca_resids")
+            if x is None or x.size != arr["rmsf"].size:
+                stale.append(f"{s}/{r.replica}")
+                continue
+            stacks.append(arr["rmsf"])
+            resids = x
         if stacks and resids is not None:
             m = np.mean(stacks, axis=0)
             sd = np.std(stacks, axis=0)
@@ -110,7 +119,13 @@ def qc_dashboard(systems, col, out: Path) -> Path:
         ax.set_title("Ca RMSF (post-equilibration; dotted = anchors)", fontsize=8)
         ax.tick_params(labelsize=6)
     else:
-        empty(ax, "no RMSF")
+        empty(ax, "no RMSF" if not stale else
+              "RMSF needs re-reduction:\nthese files predate `ca_resids`\n"
+              "(rerun 01_reduce_trajectory.py --force)")
+    if stale:
+        print(f"  note: RMSF skipped for {len(stale)} replica(s) written before the Ca residue "
+              f"axis was stored ({', '.join(stale[:3])}"
+              f"{', ...' if len(stale) > 3 else ''}); rerun the reduction with --force.")
 
     plot_series(axes[1, 0], systems, col, "apl_net", "A^2/lipid",
                 "area per lipid (protein-corrected)")

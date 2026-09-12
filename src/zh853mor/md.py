@@ -240,6 +240,20 @@ def construct_residue_map(u: mda.Universe, receptor_pdb: Path,
     return resids
 
 
+def construct_ids_for(atoms: mda.AtomGroup, prot: mda.AtomGroup,
+                      resids: np.ndarray) -> np.ndarray:
+    """Construct residue id for each residue represented in `atoms`, in topology order.
+
+    `resids` is the `construct_residue_map` array, one entry per residue of `prot`. A selection
+    is rarely one-atom-per-residue -- the ACE/NME caps carry no CA, and a glycine no sidechain
+    polar atom -- so any array derived from a selection needs its OWN residue axis. Indexing such
+    an array with the full `resids` silently mis-labels every entry after the first gap (or, if
+    you are lucky, raises a shape error in a plot).
+    """
+    position = {int(r.resid): i for i, r in enumerate(prot.residues)}
+    return np.array([resids[position[int(r.resid)]] for r in atoms.residues], dtype=int)
+
+
 def select_by_mass(u: mda.Universe, lo: float, hi: float, extra: str = "") -> mda.AtomGroup:
     """Atoms whose mass lies in (lo, hi) -- the portable way to select an element here."""
     sel = f"prop mass > {lo} and prop mass < {hi}"

@@ -374,3 +374,33 @@ def test_construct_residue_map_still_refuses_a_different_amino_acid(tmp_path, sy
     reference = _reference(tmp_path, ["ALA", "ASP", "GLU", "TRP", "HIS", "ASN"])  # TYR -> TRP
     with pytest.raises(ValueError, match=r"residue 72 is TYR .* but TRP"):
         md.construct_residue_map(system, reference)
+
+
+def test_construct_ids_for_gives_a_selection_its_own_residue_axis():
+    """The ACE/NME caps carry no Ca, so a Ca-derived array is 2 residues SHORTER than the
+    receptor. Pairing such an array with the full residue list mislabels every entry (or, if the
+    lengths happen to differ, raises a shape error deep inside a plot)."""
+    names, resids, masses, pos = [], [], [], []
+    resnames = []
+
+    def add(resname, atoms):
+        resnames.append(resname)
+        for name, mass in atoms:
+            names.append(name)
+            resids.append(67 + len(resnames))
+            masses.append(mass)
+            pos.append([4.0 * len(names), 0.0, 0.0])
+
+    add("ACE", [("CH3", 12.01), ("C", 12.01), ("O", 16.00)])          # cap: no CA
+    for _ in range(3):
+        add("ALA", [("N", 14.01), ("CA", 12.01), ("C", 12.01), ("O", 16.00)])
+    add("NME", [("N", 14.01), ("CH3", 12.01)])                        # cap: no CA
+
+    u = _universe(resnames, resids, names, masses, pos)
+    prot = u.select_atoms("protein")
+    construct = np.array([67 + i for i in range(1, len(resnames) + 1)])   # 68 .. 72
+    ca = prot.select_atoms("name CA")
+
+    assert len(prot.residues) == 5 and len(ca) == 3
+    assert md.construct_ids_for(ca, prot, construct).tolist() == [69, 70, 71]
+    assert md.construct_ids_for(prot, prot, construct).tolist() == construct.tolist()

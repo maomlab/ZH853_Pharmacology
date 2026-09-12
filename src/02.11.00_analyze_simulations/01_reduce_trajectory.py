@@ -201,9 +201,11 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
                          "residues; the per-residue occupancy would be shifted.")
     polar_contact = md.ResidueMinDistance(polar_heavy)
     # Which construct residue each row of `polar_contact` belongs to: not every residue has a
-    # polar sidechain atom, so the polar rows are a subset of the contact rows.
-    position_of = {int(r.resid): i for i, r in enumerate(prot.residues)}
-    polar_resids = np.array([resids[position_of[int(r.resid)]] for r in polar_heavy.residues])
+    # polar sidechain atom, so the polar rows are a subset of the contact rows. Likewise the Ca
+    # set, which the RMSF and the PCA are computed on: the ACE and NME caps have no Ca, so it is
+    # TWO residues shorter than the receptor and needs its own residue axis.
+    polar_resids = md.construct_ids_for(polar_heavy, prot, resids)
+    ca_resids = md.construct_ids_for(ca, prot, resids)
 
     index_of = {int(r): i for i, r in enumerate(resids)}
     anchor_rows = [index_of[r] for r in md.ANCHORS if r in index_of]
@@ -353,6 +355,8 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
     ca_arr = np.array(ca_frames, dtype=np.float32)
     prod = ca_arr[t0:]
     rmsf = np.sqrt(((prod - prod.mean(axis=0)) ** 2).sum(axis=2).mean(axis=0))
+    if rmsf.size != ca_resids.size:  # the two must stay paired or every residue label shifts
+        raise SystemExit(f"ERROR: {rmsf.size} RMSF values for {ca_resids.size} Ca atoms.")
     proj, explained = md.principal_components(prod, n_components=3)
     cosine = [cv.cosine_content(proj[:, k], index=k + 1) for k in range(proj.shape[1])]
 
@@ -414,7 +418,7 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
     out_dir.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         out_dir / f"{job.replica}.npz",
-        resids=resids, rmsf=rmsf, occupancy=per_residue_occupancy,
+        resids=resids, ca_resids=ca_resids, rmsf=rmsf, occupancy=per_residue_occupancy,
         min_dist=min_dist, anchor_resids=np.array(anchor_ids, dtype=int),
         activation=activation, activation_labels=np.array(
             [label for label, _, _ in activation_pairs]),
