@@ -353,9 +353,24 @@ def main() -> int:
         "TM Ca RMSD; every mean below is taken after it. `n_eff` is the number of INDEPENDENT",
         "samples that leaves -- not the number of frames.",
         "",
-        "## 2. Quality control",
-        "",
     ]
+    # Anything the reduction noticed about a replica belongs in the report, not only in its JSON:
+    # a ligand whose pose reference could not be resolved, or a tautomer that disagrees with the
+    # prepared receptor, changes how the numbers below should be read.
+    flagged: dict[str, list[str]] = {}
+    for r in results:
+        for w in r.summary.get("warnings", []):
+            flagged.setdefault(w, []).append(f"{r.system}/{r.replica}")
+    if flagged:
+        lines += ["### Notes from the reduction", ""]
+        # Grouped by note: the same condition usually holds for every replica of a system, and a
+        # row per replica would bury the one note that differs.
+        lines += table(["note", "where"], [
+            [note, f"{len(who)} replica(s): " + ", ".join(who[:4])
+             + (f", +{len(who) - 4} more" if len(who) > 4 else "")]
+            for note, who in flagged.items()])
+        lines += [""]
+    lines += ["## 2. Quality control", ""]
     lines += table(["system", "check", "value", "verdict", "expected"], qc_rows)
     failed = {s: [c.name for c in cs if c.verdict == "FAIL"] for s, cs in all_checks.items()}
     warned = {s: [c.name for c in cs if c.verdict == "WARN"] for s, cs in all_checks.items()}

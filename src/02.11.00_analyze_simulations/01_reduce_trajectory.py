@@ -147,7 +147,9 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
     u = mda.Universe(str(build.prmtop), str(job.dcd))
     ref_u = mda.Universe(str(build.receptor_pdb))
 
-    resids = md.construct_residue_map(u, build.receptor_pdb)   # human OPRM1 numbering
+    # Human OPRM1 numbering, transferred from the staged receptor; `warnings` collects the
+    # protonation/disulfide form differences tleap introduces (CYX at the disulfide, always).
+    resids = md.construct_residue_map(u, build.receptor_pdb, notes=warnings)
     prot = u.select_atoms("protein")
     heavy = prot.select_atoms("prop mass > 2.0")               # H is invisible at 3.5 A anyway
     ca = prot.select_atoms("name CA")

@@ -67,7 +67,10 @@ figures run **locally** on those.
 
 - **Numbering (D-19):** tleap renumbers the system from 1, so human OPRM1 numbers are transferred
   positionally from the staged `receptor.pdb` (69–349) and the transfer is refused if the residue
-  sequences disagree.
+  sequences disagree. Names are compared with the protonation/disulfide form folded away, since
+  tleap assigns it and the staged PDB does not carry it: **CYX** at the C142–C219 disulfide is
+  expected in every build and passes silently, while a differing **protonation** form is reported
+  against D-15 — a tautomer that disagrees with the prepared receptor is that failure returning.
 - **Selections:** by mass, not by name or chain — an Amber prmtop has no chains and no elements
   here, and Lipid21 has no POPC residue (PC + PA + OL), so lipids are counted one per phosphorus.
 - **Structural QC:** Cα RMSD vs the staged OPM-oriented receptor (whole and TM-only, superposed),

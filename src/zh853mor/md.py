@@ -81,6 +81,24 @@ ACTIVATION_DISTANCES: list[tuple[str, int, int]] = [
 
 C142_C219 = (142, 219)  # the conserved ECL2-TM3 disulfide, as an integrity check
 
+# tleap renames a residue whose FORM differs from the default without changing WHICH amino acid it
+# is: a disulfide cysteine becomes CYX, and a titratable residue carries its protonation state in
+# the name. Every build therefore has CYX where the staged receptor.pdb has CYS, at both ends of
+# the C142-C219 disulfide. That is not a numbering difference, so the map below folds these to the
+# parent residue before comparing sequences -- while a genuinely different amino acid still stops
+# the analysis, which is the point of the check.
+RESIDUE_FORMS: dict[str, str] = {
+    "CYX": "CYS", "CYM": "CYS",
+    "HID": "HIS", "HIE": "HIS", "HIP": "HIS", "HSD": "HIS", "HSE": "HIS", "HSP": "HIS",
+    "ASH": "ASP", "GLH": "GLU", "LYN": "LYS", "TYM": "TYR", "ARN": "ARG",
+}
+
+
+def canonical_residue(name: str) -> str:
+    """Residue name with its protonation/disulfide form removed (CYX -> CYS, HID -> HIS)."""
+    clean = name.strip().upper()
+    return RESIDUE_FORMS.get(clean, clean)
+
 
 @dataclass(frozen=True)
 class BuildDir:
@@ -171,7 +189,8 @@ def protein_residues(u: mda.Universe) -> mda.ResidueGroup:
     return prot.residues
 
 
-def construct_residue_map(u: mda.Universe, receptor_pdb: Path) -> np.ndarray:
+def construct_residue_map(u: mda.Universe, receptor_pdb: Path,
+                          notes: list[str] | None = None) -> np.ndarray:
     """Human-OPRM1 residue id for each `protein` residue of `u`, in topology order.
 
     tleap renumbers from 1; `receptor.pdb` (the staged, OPM-oriented input the system was built
@@ -179,6 +198,12 @@ def construct_residue_map(u: mda.Universe, receptor_pdb: Path) -> np.ndarray:
     order, so the map is positional. Verified by residue name, not assumed: a mismatch means the
     build directory's receptor.pdb is not the file the prmtop was built from, and every residue
     number downstream would be wrong in a way that still produces plausible numbers.
+
+    Names are compared after folding away protonation and disulfide FORM (see `RESIDUE_FORMS`),
+    which tleap assigns and the staged PDB does not carry: those differ in every build and say
+    nothing about the numbering. Any that are found are appended to `notes` -- expected for the
+    C142-C219 cysteines, worth reading for a histidine, since a tautomer that disagrees with the
+    prepared receptor is the D-15 failure returning.
     """
     sys_res = protein_residues(u)
     ref_res = protein_residues(mda.Universe(str(receptor_pdb)))
@@ -189,14 +214,30 @@ def construct_residue_map(u: mda.Universe, receptor_pdb: Path) -> np.ndarray:
             f"{receptor_pdb.name} has {len(ref_names)} protein residues but the topology has "
             f"{len(sys_names)}; they are not the same receptor."
         )
-    bad = [(i, a, b) for i, (a, b) in enumerate(zip(sys_names, ref_names, strict=True)) if a != b]
+    resids = np.array([int(r.resid) for r in ref_res], dtype=int)
+    bad, forms = [], []
+    for i, (a, b) in enumerate(zip(sys_names, ref_names, strict=True)):
+        if a == b or canonical_residue(a) == canonical_residue(b) == "CYS":
+            # A disulfide cysteine is CYX in every prmtop this pipeline builds and CYS in every
+            # staged receptor. Reporting it each run would be noise around the cases that matter.
+            continue
+        if canonical_residue(a) == canonical_residue(b):
+            forms.append(f"{b}{resids[i]}->{a}")
+        else:
+            bad.append((int(resids[i]), a, b))
     if bad:
-        i, a, b = bad[0]
+        resid, a, b = bad[0]
         raise ValueError(
-            f"residue {i} is {a} in the topology but {b} in {receptor_pdb.name} "
+            f"residue {resid} is {a} in the topology but {b} in {receptor_pdb.name} "
             f"({len(bad)} mismatches); the numbering transfer would be wrong."
         )
-    return np.array([int(r.resid) for r in ref_res], dtype=int)
+    if forms and notes is not None:
+        # Not the disulfides: a PROTONATION form that disagrees with the prepared receptor is the
+        # D-15 failure (tleap overriding an upstream tautomer) coming back, and is worth reading.
+        notes.append(f"{len(forms)} residue(s) carry a different protonation form in the topology "
+                     f"than in {receptor_pdb.name}: {', '.join(forms)} -- check that tleap did not "
+                     "override the prepared assignment (SPECIFICATION D-15)")
+    return resids
 
 
 def select_by_mass(u: mda.Universe, lo: float, hi: float, extra: str = "") -> mda.AtomGroup:

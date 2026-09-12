@@ -339,3 +339,38 @@ def test_build_dir_reads_sampling_env(tmp_path):
     (path / "sampling.env").write_text("ZH_PROD_NS=${ZH_PROD_NS:-750}\n")
     assert build.sampling()["ZH_PROD_NS"] == 750.0
     assert md.BuildDir(tmp_path / "nope", "apo", "ASP", "x").sampling() == {}
+
+
+def _reference(tmp_path, resnames, name="receptor.pdb"):
+    names, resids, masses, pos = _protein_atoms(resnames, FIRST_CONSTRUCT_RESID)
+    path = tmp_path / name
+    _universe(resnames, resids, names, masses, pos, segid="R").atoms.write(str(path))
+    return path
+
+
+def test_construct_residue_map_tolerates_tleap_protonation_forms(tmp_path, system):
+    """tleap writes CYX for a disulfide and HID/HIE for a tautomer; the staged PDB may not.
+
+    These differ in every build (both disulfide cysteines), say nothing about the numbering, and
+    must not stop the analysis -- but they are reported, because a histidine whose tautomer
+    disagrees with the prepared receptor is the D-15 failure coming back.
+    """
+    # The system fixture's protein is ALA ASP GLU TYR HIS ASN; the staged receptor carries the
+    # un-formed names for the titratable ones.
+    reference = _reference(tmp_path, ["ALA", "ASH", "GLH", "TYR", "HID", "ASN"])
+    notes: list[str] = []
+    mapping = md.construct_residue_map(system, reference, notes=notes)
+    assert mapping.tolist() == list(range(69, 75))
+    assert len(notes) == 1
+    assert "ASH70->ASP" in notes[0] and "HID73->HIS" in notes[0]
+
+    assert md.canonical_residue("CYX") == "CYS"
+    assert md.canonical_residue("HIE") == "HIS"
+    assert md.canonical_residue("trp") == "TRP"
+
+
+def test_construct_residue_map_still_refuses_a_different_amino_acid(tmp_path, system):
+    """Folding away the protonation form must not weaken the check it exists for."""
+    reference = _reference(tmp_path, ["ALA", "ASP", "GLU", "TRP", "HIS", "ASN"])  # TYR -> TRP
+    with pytest.raises(ValueError, match=r"residue 72 is TYR .* but TRP"):
+        md.construct_residue_map(system, reference)
