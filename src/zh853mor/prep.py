@@ -168,13 +168,14 @@ def cap_termini(pdb_in, pdb_out) -> dict:
         the C-N bond length (~1.34 A) and make the scan blind to real clashes elsewhere.
         """
         cloud = np.array([a["xyz"] for a in atoms if a["resid"] != anchor])
-        top = (None, -1.0, 0.0)
+        best_placed: list[tuple[str, np.ndarray, str]] = []
+        best_gap, best_tor = -1.0, 0.0
         for tor in range(0, 360, 5):
             placed = build(float(tor))
             gap = min(float(np.linalg.norm(cloud - p, axis=1).min()) for _, p, _ in placed)
-            if gap > top[1]:
-                top = (placed, gap, float(tor))
-        return top
+            if gap > best_gap:
+                best_placed, best_gap, best_tor = placed, gap, float(tor)
+        return best_placed, best_gap, best_tor
 
     # ACE: C bonded to N(first); torsion scanned is C(ACE)-N-CA-C, i.e. phi of the first residue.
     def build_ace(tor: float):
