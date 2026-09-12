@@ -70,6 +70,48 @@ def jobs(builds: list[md.BuildDir]) -> list[Job]:
     return [Job(b, name, dcd) for b in builds for name, dcd in b.replicas()]
 
 
+def listing(todo: list[Job]) -> list[str]:
+    """One tab-separated line per job: index, system, replica, frames, ns, target, status, path.
+
+    Read from the DCD header and the state log, so listing the whole panel is instant. The length
+    columns are the point: a replica that died at its wall-time or is still being written looks
+    exactly like a finished one to a `glob`, and reducing it silently analyses a partial run.
+    """
+    targets: dict[str, float | None] = {}
+    rows = []
+    for n, job in enumerate(todo, 1):
+        name = job.build.name
+        if name not in targets:
+            targets[name] = job.build.sampling().get("ZH_PROD_NS")
+        try:
+            span = md.replica_span(job.dcd, targets[name])
+            frames, ns, status = f"{span.n_frames}", f"{span.ns:.1f}", span.status
+        except (OSError, ValueError, KeyError, IndexError) as exc:
+            frames, ns, status = "?", "?", f"unreadable ({type(exc).__name__})"
+        target = targets[name]
+        rows.append("\t".join([str(n), name, job.replica, frames, ns,
+                                "?" if target is None else f"{target:.0f}", status,
+                                str(job.dcd)]))
+    return rows
+
+
+def inventory_notes(builds: list[md.BuildDir]) -> list[str]:
+    """Per-build remarks that are not about any single replica -- chiefly MISSING ones.
+
+    A build configured for 3 replicas that produced 2 is invisible in a per-replica listing:
+    everything present looks fine, and the replicate spread quietly rests on two points.
+    """
+    notes = []
+    for b in builds:
+        present = {name for name, _ in b.replicas()}
+        want = int(b.sampling().get("ZH_REPLICAS", 0))
+        if want and len(present) < want:
+            missing = [f"prod_r{i}" for i in range(1, want + 1) if f"prod_r{i}" not in present]
+            notes.append(f"note: {b.name} has {len(present)} of {want} configured replicas"
+                         + (f" (missing {', '.join(missing)})" if missing else ""))
+    return notes
+
+
 def _minimum_image(positions: np.ndarray, anchor: np.ndarray, box: np.ndarray) -> np.ndarray:
     """Shift a whole molecule by box vectors so its centroid is nearest `anchor`.
 
@@ -348,7 +390,11 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
         "build": build.name, "build_dir": str(build.path), "ligand": build.ligand,
         "d250": build.d250, "stamp": build.stamp, "replica": job.replica,
         "n_frames": n_frames, "stride": stride, "dt_ps": dt_ps,
-        "length_ns": float(series["time_ns"][-1]), "n_atoms": int(len(u.atoms)),
+        "length_ns": float(series["time_ns"][-1]),
+        # What the build was CONFIGURED to run, so the report can say 143 of 500 ns rather than
+        # just 143 ns -- a replica killed at its wall-time is otherwise indistinguishable.
+        "target_ns": build.sampling().get("ZH_PROD_NS"),
+        "n_atoms": int(len(u.atoms)),
         "n_protein_residues": n_res, "n_phospholipids": n_phos, "n_sterols": n_sterol,
         "n_waters": int(len(water_o)), "n_sodium": int(len(sodium)),
         "ligand_resname": resname, "n_ligand_atoms": int(len(lig)),
@@ -416,8 +462,10 @@ def main() -> int:
         raise SystemExit("ERROR: no production trajectories (prod_r*.dcd) found.")
 
     if args.list:
-        for n, job in enumerate(todo, 1):
-            print(f"{n}\t{job.build.name}\t{job.replica}\t{job.dcd}")
+        for row in listing(todo):
+            print(row)
+        for note in inventory_notes(builds):   # stderr: the listing stays one line per job
+            print(note, file=sys.stderr)
         return 0
 
     if args.index is not None:

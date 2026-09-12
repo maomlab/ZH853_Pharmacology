@@ -28,9 +28,32 @@ On the cluster, after production has finished:
 
 ```bash
 cd src/02.11.00_simulation_analysis
-./submit_reduce.sh -n          # dry run: shows the (build, replica) list and the sbatch command
+./submit_reduce.sh -n          # dry run: shows the inventory and the sbatch command, submits nothing
 ./submit_reduce.sh             # one array task per replica; resources from the root cluster.env
 ```
+
+Both print what they found before doing anything, with **how long each replica actually is** —
+frames and ns from the DCD header, against the `ZH_PROD_NS` its build was configured for:
+
+```
+  #   system       replica     frames        ns    target  status
+  1   apo_ASH      prod_r1       5000     500.0       500  complete
+  2   apo_ASH      prod_r2       1431     143.1       500  partial-29%
+  3   apo_ASH      prod_r3       4880     488.0       500  writing
+note: ZH831_ASH has 2 of 3 configured replicas (missing prod_r3)
+```
+
+This is the check a file listing cannot make. A replica killed at its wall-time, one still being
+written, and a finished one are the same `prod_r*.dcd` to a `glob`; reducing the first two
+silently analyses a partial run, and a build that produced two replicas instead of three rests
+its replicate spread on two points without saying so. `writing` means the DCD was touched in the
+last 15 minutes, `partial-NN%` that it is short of its target, and `unreadable` that the file
+could not be opened at all. Everything is read from the DCD header and the state log, so listing
+the whole panel costs milliseconds however large the trajectories are.
+
+The submit script warns but does not refuse: reducing a partial run is often what you want. To
+take only the finished ones, call `01_reduce_trajectory.py --build <dir>` (repeatable) or
+`--replica <name>` directly instead of submitting the array.
 
 or, for a single replica without SLURM (a few minutes):
 

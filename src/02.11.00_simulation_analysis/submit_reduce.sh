@@ -31,12 +31,47 @@ source "$HERE/../02.10.00_slurm_bundle/cluster_env.sh" || exit 1
 : "${ZH_CPU_PARTITION:=${ZH_GPU_PARTITION:-}}"
 [ -n "$ZH_CPU_PARTITION" ] || die "set ZH_CPU_PARTITION (or ZH_GPU_PARTITION) in ${ZH_CLUSTER_ENV}."
 
-# The listing is the source of truth for the array size AND for what each index means.
+# The listing is the source of truth for the array size AND for what each index means. It also
+# carries each replica's LENGTH, read from the DCD header and the state log: a replica that hit
+# its wall-time or is still being written is indistinguishable from a finished one by file name
+# alone, and reducing it silently analyses a partial run. Per-build remarks (chiefly missing
+# replicas) come back on stderr, so they pass through to the terminal rather than into $LISTING.
 LISTING="$(python "$HERE/01_reduce_trajectory.py" --list)" \
   || die "could not list the production replicas (is intermediate/02.10.00_build populated?)."
 N=$(printf '%s\n' "$LISTING" | grep -c .)
 [ "$N" -gt 0 ] || die "no production trajectories found."
-printf '%s\n' "$LISTING" | sed 's/^/  /'
+
+FMT='  %-3s %-12s %-9s %8s %9s %9s  %s\n'
+# shellcheck disable=SC2059 -- FMT is a fixed format string, not user input
+printf "$FMT" "#" "system" "replica" "frames" "ns" "target" "status"
+printf '%s\n' "$LISTING" | awk -F'\t' -v fmt="$FMT" \
+  '{ printf fmt, $1, $2, $3, $4, $5, $6, $7 }'
+
+read -r TOTAL_NS N_PARTIAL N_WRITING N_BAD <<SUMMARY
+$(printf '%s\n' "$LISTING" | awk -F'\t' '
+   { if ($5 != "?") total += $5
+     if ($7 ~ /^partial/)          partial++
+     else if ($7 == "writing")     writing++
+     else if ($7 ~ /^unreadable/)  bad++ }
+   END { printf "%.0f %d %d %d", total, partial + 0, writing + 0, bad + 0 }')
+SUMMARY
+echo "  ${N} replicas, ${TOTAL_NS} ns of trajectory in total"
+
+if [ "$N_WRITING" -gt 0 ]; then
+  echo "WARNING: $N_WRITING replica(s) were written within the last 15 minutes -- the production"
+  echo "  job is probably still running. Reducing one now measures whatever it has reached so far."
+fi
+if [ "$N_PARTIAL" -gt 0 ]; then
+  echo "WARNING: $N_PARTIAL replica(s) are short of the ZH_PROD_NS their build was configured for."
+  echo "  A run that hit its wall-time can be extended; reducing it now analyses the partial run."
+fi
+if [ "$N_BAD" -gt 0 ]; then
+  echo "WARNING: $N_BAD trajectory file(s) could not be read at all (truncated or still opening)."
+fi
+if [ $((N_WRITING + N_PARTIAL + N_BAD)) -gt 0 ]; then
+  echo "  To reduce only what is finished, pass --build <dir> (repeatable) or --replica <name>"
+  echo "  to 01_reduce_trajectory.py directly instead of submitting the whole array."
+fi
 
 SBATCH_ARGS=(
   --account="$ZH_ACCOUNT"

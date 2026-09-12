@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -107,6 +108,24 @@ class BuildDir:
         out = []
         for dcd in sorted(self.path.glob("prod_r*.dcd")):
             out.append((dcd.stem, dcd))
+        return out
+
+    def sampling(self) -> dict[str, float]:
+        """`ZH_*` numbers from this build's `sampling.env`, empty if it has none.
+
+        01_build_system.sh writes the file with the values already substituted (the heredoc is
+        unquoted), so a bare `ZH_PROD_NS=500` is the normal case; the `${VAR:-default}` form is
+        still accepted in case one was hand-edited back in.
+        """
+        out: dict[str, float] = {}
+        try:
+            text = (self.path / "sampling.env").read_text()
+        except OSError:
+            return out
+        for line in text.splitlines():
+            m = re.match(r"\s*(ZH_[A-Z_]+)=\$?\{?[A-Z_]*:?-?([0-9]+(?:\.[0-9]+)?)\}?", line)
+            if m:
+                out[m[1]] = float(m[2])
         return out
 
     def ligand_resname(self) -> str | None:
@@ -319,6 +338,79 @@ def principal_components(coords: np.ndarray, n_components: int = 3) -> tuple[np.
     k = min(n_components, s.size)
     var = s**2
     return u_[:, :k] * s[:k], (var[:k] / var.sum()) if var.sum() > 0 else np.zeros(k)
+
+
+@dataclass
+class ReplicaSpan:
+    """How much trajectory a replica actually contains, and whether that is all of it.
+
+    Read from the DCD HEADER and the state log, never by loading frames, so listing a whole panel
+    costs milliseconds: an unfinished or dead replica should be visible before a job array is
+    submitted, not after it has been reduced.
+    """
+
+    n_frames: int
+    dt_ps: float
+    ns: float
+    target_ns: float | None
+    log_ns: float | None
+    age_s: float          # seconds since the DCD was last written
+
+    @property
+    def fraction(self) -> float | None:
+        if not self.target_ns:
+            return None
+        return self.ns / self.target_ns
+
+    @property
+    def status(self) -> str:
+        """One word for the listing: what state this replica is in."""
+        if self.age_s < WRITING_WINDOW_S:
+            return "writing"
+        if self.target_ns is None:
+            return "no-target"
+        frac = self.fraction or 0.0
+        if frac >= COMPLETE_FRACTION:
+            return "complete"
+        return f"partial-{frac * 100:.0f}%"
+
+
+WRITING_WINDOW_S = 900.0    # a DCD touched within 15 min is probably still being written
+COMPLETE_FRACTION = 0.99    # the last frame lands one report interval short of the nominal length
+
+
+def dcd_span(dcd: Path) -> tuple[int, float]:
+    """(frames, ps per frame) from the DCD header alone -- no topology, no frames read.
+
+    The DCD header carries the frame count and the inter-frame interval (AKMA), so this is O(1)
+    on a 5 GB trajectory.
+    """
+    from MDAnalysis import units
+    from MDAnalysis.lib.formats.libdcd import DCDFile
+
+    with DCDFile(str(dcd)) as fh:
+        header = dict(fh.header)
+        n_frames = int(fh.n_frames)
+    dt_ps = float(units.convert(float(header["delta"]), "AKMA", "ps"))
+    dt_ps *= max(int(header.get("nsavc", 1)), 1)
+    return n_frames, dt_ps
+
+
+def replica_span(dcd: Path, target_ns: float | None = None) -> ReplicaSpan:
+    """How long the replica at `dcd` ran, against the length its build was configured for."""
+    n_frames, dt_ps = dcd_span(dcd)
+    log_ns = None
+    log = dcd.with_suffix(".log")
+    if log.exists():
+        try:
+            series = read_state_log(log)
+            if "time_ps" in series and series["time_ps"].size:
+                log_ns = float(series["time_ps"][-1]) / 1000.0
+        except (OSError, ValueError):
+            log_ns = None
+    return ReplicaSpan(n_frames=n_frames, dt_ps=dt_ps, ns=n_frames * dt_ps / 1000.0,
+                       target_ns=target_ns, log_ns=log_ns,
+                       age_s=max(time.time() - dcd.stat().st_mtime, 0.0))
 
 
 def read_state_log(path: Path) -> dict[str, np.ndarray]:

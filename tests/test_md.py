@@ -8,6 +8,8 @@ by a small system whose right answers are known by construction.
 
 from __future__ import annotations
 
+import time
+
 import MDAnalysis as mda
 import numpy as np
 import pytest
@@ -267,3 +269,73 @@ def test_load_replicas_and_grouping(tmp_path):
     assert rep.series("rmsd_ca_tm", equilibrated=False).size == 10
     with pytest.raises(KeyError):
         rep.series("nonexistent")
+
+
+def _write_dcd(path, n_frames=5, n_atoms=3, dt=100.0):
+    u = mda.Universe.empty(n_atoms, n_residues=1, atom_resindex=np.zeros(n_atoms, dtype=int),
+                           residue_segindex=np.zeros(1, dtype=int), trajectory=True)
+    u.add_TopologyAttr("name", ["C"] * n_atoms)
+    u.add_TopologyAttr("resname", ["ALA"])
+    u.add_TopologyAttr("resid", [1])
+    u.load_new(np.zeros((1, n_atoms, 3), dtype=np.float32), order="fac")
+    with mda.Writer(str(path), n_atoms=n_atoms, dt=dt) as w:
+        for _ in range(n_frames):
+            w.write(u.atoms)
+
+
+def test_dcd_span_reads_the_header_only(tmp_path):
+    """Frame count and interval come from the header, so a 5 GB replica costs milliseconds."""
+    dcd = tmp_path / "prod_r1.dcd"
+    _write_dcd(dcd, n_frames=7, dt=100.0)
+    n_frames, dt_ps = md.dcd_span(dcd)
+    assert n_frames == 7
+    assert dt_ps == pytest.approx(100.0, rel=1e-5)
+
+
+def test_replica_span_against_the_build_target(tmp_path):
+    dcd = tmp_path / "prod_r1.dcd"
+    _write_dcd(dcd, n_frames=10, dt=100.0)          # 10 x 100 ps = 1 ns
+    (tmp_path / "prod_r1.log").write_text(
+        '#"Step","Time (ps)","Temperature (K)"\n25000,100.0,310.0\n50000,900.0,310.0\n')
+
+    span = md.replica_span(dcd, target_ns=1.0)
+    assert span.ns == pytest.approx(1.0)
+    assert span.log_ns == pytest.approx(0.9)        # the log's last recorded time
+    assert span.fraction == pytest.approx(1.0)
+
+    short = md.replica_span(dcd, target_ns=4.0)
+    assert short.fraction == pytest.approx(0.25)
+    assert md.replica_span(dcd).fraction is None    # no target configured
+
+
+def test_replica_span_status_words(tmp_path):
+    dcd = tmp_path / "prod_r1.dcd"
+    _write_dcd(dcd, n_frames=10, dt=100.0)
+    fresh = md.replica_span(dcd, target_ns=1.0)
+    assert fresh.status == "writing"                # just written by this test
+
+    import os
+    old = time.time() - 2 * md.WRITING_WINDOW_S
+    os.utime(dcd, (old, old))
+    assert md.replica_span(dcd, target_ns=1.0).status == "complete"
+    assert md.replica_span(dcd, target_ns=4.0).status == "partial-25%"
+    assert md.replica_span(dcd).status == "no-target"
+
+
+def test_build_dir_reads_sampling_env(tmp_path):
+    path = tmp_path / "ZH853_ASP_20260901_120000"
+    path.mkdir()
+    (path / "system.prmtop").touch()
+    (path / "sampling.env").write_text(
+        "# comment\nZH_SYS=system\nZH_PREPROD_NS=100\nZH_REPLICAS=3\nZH_PROD_NS=500\n"
+        "ZH_PROD_STATE=\n")
+    build = md.discover_builds(tmp_path)[0]
+    sampling = build.sampling()
+    assert sampling["ZH_PROD_NS"] == 500.0
+    assert sampling["ZH_REPLICAS"] == 3.0
+    assert "ZH_PROD_STATE" not in sampling          # no number to read
+
+    # The un-substituted shell form, in case a sampling.env was hand-edited back to it.
+    (path / "sampling.env").write_text("ZH_PROD_NS=${ZH_PROD_NS:-750}\n")
+    assert build.sampling()["ZH_PROD_NS"] == 750.0
+    assert md.BuildDir(tmp_path / "nope", "apo", "ASP", "x").sampling() == {}

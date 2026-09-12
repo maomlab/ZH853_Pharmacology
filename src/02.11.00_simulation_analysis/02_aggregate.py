@@ -334,11 +334,18 @@ def main() -> int:
         lengths = [float(r.summary.get("length_ns", np.nan)) for r in reps]
         t0s = [float(r.summary.get("equilibration", {}).get("t0_ns", np.nan)) for r in reps]
         neff = [float(r.summary.get("equilibration", {}).get("n_eff", np.nan)) for r in reps]
+        # Against the length the build was configured for: "143" and "143 of 500" are very
+        # different statements about a replica, and only the second is checkable.
+        targets = [float(r.summary.get("target_ns") or np.nan) for r in reps]
+        target = np.nanmean(targets) if np.isfinite(targets).any() else np.nan
+        per_replica = f"{np.nanmean(lengths):.0f}"
+        if np.isfinite(target) and target > 0:
+            per_replica += f" / {target:.0f} ({100 * np.nanmean(lengths) / target:.0f}%)"
         inv.append([s, f"{len(reps)}", f"{np.nansum(lengths):.0f}",
-                    f"{np.nanmean(lengths):.0f}", f"{np.nanmean(t0s):.0f}",
+                    per_replica, f"{np.nanmean(t0s):.0f}",
                     f"{np.nanmin(neff):.0f}",
                     reps[0].summary.get("ligand_reference", "-")])
-    lines += table(["system", "replicas", "total ns", "ns/replica", "mean t0 (ns)",
+    lines += table(["system", "replicas", "total ns", "ns/replica (of target)", "mean t0 (ns)",
                     "min n_eff", "ligand reference"], inv)
     lines += [
         "",
