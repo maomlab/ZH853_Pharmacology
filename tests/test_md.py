@@ -404,3 +404,37 @@ def test_construct_ids_for_gives_a_selection_its_own_residue_axis():
     assert len(prot.residues) == 5 and len(ca) == 3
     assert md.construct_ids_for(ca, prot, construct).tolist() == [69, 70, 71]
     assert md.construct_ids_for(prot, prot, construct).tolist() == construct.tolist()
+
+
+def test_timeseries_pairs_each_series_with_its_own_time_axis(tmp_path):
+    """The state log is written by a different reporter than the trajectory.
+
+    In a run that is still going it can hold one more row than the DCD, so a `log_*` series
+    plotted against the trajectory's time axis raises a shape error -- and, when the lengths
+    happen to agree, silently plots against the wrong times.
+    """
+    d = tmp_path / "apo_ASH"
+    d.mkdir()
+    (d / "prod_r1.json").write_text(
+        '{"build": "apo_ASH", "replica": "prod_r1", '
+        '"equilibration": {"t0_frames": 1, "t0_ns": 0.2}}')
+    np.savez(d / "prod_r1.npz",
+             time_ns=np.array([0.1, 0.2, 0.3]),                    # 3 trajectory frames
+             rmsd_ca_tm=np.array([1.0, 1.1, 1.2]),
+             log_time_ps=np.array([100.0, 200.0, 300.0, 400.0]),   # 4 log rows: one ahead
+             log_density=np.array([1.01, 1.02, 1.03, 1.04]))
+    rep = md.load_replicas(tmp_path)[0]
+
+    t, y = rep.timeseries("log_density")
+    assert t.tolist() == [0.1, 0.2, 0.3, 0.4]      # the LOG's own axis, converted to ns
+    assert y.size == t.size
+
+    t, y = rep.timeseries("rmsd_ca_tm")
+    assert t.tolist() == [0.1, 0.2, 0.3]
+    assert rep.t0_ns == 0.2
+
+    # A torn final row (log shorter than its own time column) trims to the overlap.
+    np.savez(d / "prod_r1.npz", time_ns=np.array([0.1, 0.2]),
+             log_time_ps=np.array([100.0, 200.0, 300.0]), log_density=np.array([1.01, 1.02]))
+    t, y = md.load_replicas(tmp_path)[0].timeseries("log_density")
+    assert t.tolist() == [0.1, 0.2] and y.tolist() == [1.01, 1.02]

@@ -537,6 +537,12 @@ class ReplicaResult:
         with np.load(self.npz_path, allow_pickle=False) as data:
             return {k: data[k] for k in data.files}
 
+    @property
+    def t0_ns(self) -> float:
+        """Simulated time at which production is taken to start, in ns."""
+        eq = self.summary.get("equilibration", {})
+        return float(eq.get("t0_ns", 0.0))
+
     def series(self, name: str, equilibrated: bool = True) -> np.ndarray:
         """One timeseries, by default with the pre-equilibration frames dropped."""
         with np.load(self.npz_path, allow_pickle=False) as data:
@@ -544,6 +550,27 @@ class ReplicaResult:
                 raise KeyError(f"{self.npz_path.name} has no series '{name}'")
             arr = np.asarray(data[name], dtype=float)
         return arr[self.t0:] if equilibrated else arr
+
+    def timeseries(self, name: str) -> tuple[np.ndarray, np.ndarray]:
+        """(time in ns, values) for one series, each paired with ITS OWN time axis.
+
+        The `log_*` series come from the OpenMM state log, written by a different reporter than
+        the trajectory: the two have separate time columns and, in a run that is still going, the
+        log can be one sample longer than the DCD. Plotting a log series against the trajectory's
+        time axis is wrong even when the lengths happen to agree, and raises a shape error when
+        they do not. Where the two still differ (a torn final row), both are trimmed to the
+        shorter -- they are the same monotonic stream, so the overlap is aligned.
+        """
+        values = self.series(name, equilibrated=False)
+        axis = "log_time_ps" if name.startswith("log_") else "time_ns"
+        try:
+            times = self.series(axis, equilibrated=False)
+            if axis == "log_time_ps":
+                times = times / 1000.0
+        except KeyError:
+            times = np.arange(values.size, dtype=float)
+        n = min(times.size, values.size)
+        return times[:n], values[:n]
 
     def mean_of(self, name: str) -> float:
         """Post-equilibration mean of an observable, as recorded by the reduction step."""

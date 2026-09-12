@@ -58,8 +58,9 @@ def plot_series(ax, systems, col, name, ylabel, title):
     for s, reps in systems.items():
         for r in reps:
             try:
-                y = r.series(name, equilibrated=False)
-                t = r.series("time_ns", equilibrated=False)
+                # Each series against its OWN time axis: the state-log series are written by a
+                # different reporter than the trajectory and need not have the same length.
+                t, y = r.timeseries(name)
             except KeyError:
                 continue
             if not np.isfinite(y).any():
@@ -67,9 +68,10 @@ def plot_series(ax, systems, col, name, ylabel, title):
             ax.plot(t, y, lw=0.6, alpha=0.8, color=col[s],
                     label=None if s in labelled else s)
             labelled.add(s)
-            # Mark where the relaxation was judged to end; means are taken after this.
-            if 0 < r.t0 < len(t):
-                ax.axvline(t[r.t0], color=col[s], lw=0.5, ls=":", alpha=0.5)
+            # Mark where the relaxation was judged to end; means are taken after this. Drawn at
+            # the TIME, so it lands in the right place whichever axis the series carries.
+            if r.t0_ns > 0:
+                ax.axvline(r.t0_ns, color=col[s], lw=0.5, ls=":", alpha=0.5)
             drawn += 1
     if not drawn:
         empty(ax, f"no {name}")
@@ -175,10 +177,11 @@ def convergence_figure(systems, col, out: Path) -> Path:
     for s, reps in systems.items():
         for r in reps:
             try:
-                y = r.series("rmsd_ca_tm")
-                t = r.series("time_ns")
+                t, y = r.timeseries("rmsd_ca_tm")
             except KeyError:
                 continue
+            keep = t >= r.t0_ns            # the running mean is of the production window
+            t, y = t[keep], y[keep]
             mask = np.isfinite(y)
             y, t = y[mask], t[mask]
             if y.size < 20:
