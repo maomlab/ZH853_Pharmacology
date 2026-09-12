@@ -57,9 +57,35 @@ cross-check.
   (semi-isotropic, γ=0), 2 fs.
 - **Production** (`03_production.py`): LangevinMiddle 310 K, MonteCarloMembraneBarostat 1 bar,
   **HMR → 4 fs**, ≥3 replicas × ~500 ns.
-- **QC** (`04_analyze.py`): backbone RMSD, pre-aligned RMSF, **receptor-aligned ligand RMSD**,
-  key-contact occupancy (D149/E231/H299/H321/Y328), membrane APL; replicate spread + block averaging
-  for error bars (RMSD-plateau alone is insufficient).
+- **Per-replica QC** (`04_analyze.py`): backbone RMSD, pre-aligned RMSF, **receptor-aligned ligand
+  RMSD**, key-contact occupancy, membrane APL — a smoke test that one run produced something sane.
+
+## 6. Production analysis (`02.11.00_simulation_analysis/`)
+Two machines by design (D-18): each replica is reduced **on the cluster** (one SLURM array task;
+the panel is ~100 GB of trajectory) to a few hundred kB of observables, and aggregation, tables and
+figures run **locally** on those.
+
+- **Numbering (D-19):** tleap renumbers the system from 1, so human OPRM1 numbers are transferred
+  positionally from the staged `receptor.pdb` (69–349) and the transfer is refused if the residue
+  sequences disagree.
+- **Selections:** by mass, not by name or chain — an Amber prmtop has no chains and no elements
+  here, and Lipid21 has no POPC residue (PC + PA + OL), so lipids are counted one per phosphorus.
+- **Structural QC:** Cα RMSD vs the staged OPM-oriented receptor (whole and TM-only, superposed),
+  Cα RMSF, receptor-aligned ligand RMSD against the **deposited pose**, ligand internal RMSD and
+  R_g, C142–C219, bilayer thickness (P–P), area per lipid (gross and convex-hull-corrected), OPM
+  z-registration, and T/density/volume from the OpenMM state log.
+- **Interactions (D-21):** per-residue minimum heavy-atom distance to the ligand every frame, with
+  the **same cutoffs as the static fingerprint** (4.5 Å contact, 3.5 Å polar), so MD occupancy and
+  the cryo-EM fingerprint are directly comparable; plus bridging-water counts, since the canonical
+  H6.52 contact is water-mediated and would otherwise read as absent.
+- **State observables:** R3.50–T6.34 and R3.50–Y7.53 Cα rulers (Cα rather than sidechain tips: at
+  3.5 Å the rotamers are the least reliable coordinates), and Na⁺ occupancy of the D2.50 site —
+  the direct test of the ASP/ASH pair (D-11).
+- **Convergence (D-20):** equilibration detected per replica by maximising the effective sample
+  size (Chodera 2016) on the TM Cα RMSD, then statistical inefficiency g, n_eff, blocking curves,
+  R-hat across replicas and the Hess (2002) cosine content of the leading principal components.
+  Means are quoted with correlation-corrected standard errors and replicate spread; occupancies
+  with SEM over replicas.
 
 ## Open items (cluster-dependent — OQ-3)
 GPU type / partition / wall-time / account and QM engine (Psi4 vs Gaussian for RESP) are marked

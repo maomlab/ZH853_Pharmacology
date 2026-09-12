@@ -26,6 +26,7 @@
         prep-complex-split prep-receptor-protonate prep-receptor-rebuild \
         prep-ZH853-protonate prep-receptor-orient prep-analogs-pose \
         prep-ligand-parameterize prep \
+        sim-reduce sim-aggregate sim-figures simulation-analysis \
         membrane-plot \
         molstar-render figures manuscript clean-intermediate
 
@@ -121,6 +122,22 @@ prep-ligand-parameterize:  ## 02.08.00  GAFF2/AM1-BCC parameters for every ligan
 # every other target in this Makefile runs in zh853mor-local. Run it separately, in that env.
 prep: prep-complex-split prep-receptor-protonate prep-receptor-rebuild prep-ZH853-protonate \
       prep-receptor-orient prep-analogs-pose  ## Run the full Phase-2 local prep, in script order
+
+## Production MD analysis - Phase 4  [local env; step 01 runs ON THE CLUSTER]
+# 01_reduce_trajectory.py is deliberately NOT a make target of its own beyond `sim-reduce`: it
+# reads the trajectories, which stay on the cluster (~100 GB for the panel), and runs there as a
+# job array (src/02.11.00_simulation_analysis/submit_reduce.sh). Everything below it works on the
+# few hundred kB per replica that reduction writes, so it runs locally.
+sim-reduce:  ## 02.11.00  Reduce production replicas -> intermediate/ [CLUSTER: needs the DCDs + zh853mor-prep]
+	python src/02.11.00_simulation_analysis/01_reduce_trajectory.py --all
+
+sim-aggregate:  ## 02.11.00  QC verdicts + occupancy tables + report -> product/
+	python src/02.11.00_simulation_analysis/02_aggregate.py
+
+sim-figures:  ## 02.11.00  QC dashboard, convergence, occupancy, pocket dynamics -> product/
+	python src/02.11.00_simulation_analysis/03_figures.py
+
+simulation-analysis: sim-aggregate sim-figures  ## Full local MD analysis (after sim-reduce on the cluster)
 
 ## Figures & manuscript  [LOCAL env (zh853mor-local); molstar-render also needs Node.js >= 18]
 membrane-plot: prep-receptor-orient  ## 03.04.00  Membrane-placement determination plot -> product/ (manuscript panel B)

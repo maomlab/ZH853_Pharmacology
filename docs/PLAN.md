@@ -1,6 +1,6 @@
 # ZH853–MOR Structure Analysis — Project Plan
 
-**Status:** living document. Last updated 2026-07-22.
+**Status:** living document. Last updated 2026-09-12.
 Tracks what is planned, in progress, done, and considered-but-deferred.
 Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICATION.md).
 
@@ -22,6 +22,15 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > draft started** — `product/manuscript/manuscript_20260722.md` synthesizes Objectives 1–3 + methods
 > ([prospective] items flagged pending MD/FEP). Remaining: cluster submission (OQ-3), MD occupancy
 > validation, PLIP/ProLIF cross-check, Phase 6 FEP, then fold results into the manuscript.
+>
+> **Update 2026-09-12.** Cluster settings are resolved (`cluster.env`; OQ-3 closed for the MD
+> stages) and the panel is building/running — the apo arm is in production. **Phase 4 analysis is
+> implemented**: `src/02.11.00_simulation_analysis/` reduces each replica on the cluster and
+> aggregates locally into QC verdicts, occupancy tables with replicate error bars, a convergence
+> assessment (n_eff, blocking, R-hat, PCA cosine content — D-20) and four figures. It has been
+> exercised end to end on a synthetic system but **not yet on a finished production trajectory**,
+> so no result below has changed. Next: run it on the completed replicas, then fold the numbers
+> into the manuscript's [prospective] placeholders.
 
 ---
 
@@ -139,7 +148,7 @@ docs/            # this plan, references, decisions
 | `src/01.*` | **Data acquisition & QC** — fetch comparator PDBs; parse/validate cryoEM model; MolProbity-style checks |
 | `src/02.*` | **Structure preparation** — protonation, caps, disulfides, ligand parameterization, membrane build |
 | `src/03.*` | **Static interaction analysis** — PLIP/ProLIF fingerprints; comparative pocket analysis (Obj 1, 2) |
-| `src/04.*` | **MD equilibration & production** — SLURM task bundles; QC (Obj: MD + QC) |
+| `src/02.10.*`, `src/02.11.*` | **MD build/run bundle; production analysis & QC** (Obj: MD + QC) |
 | `src/05.*` | **Analog cheminformatics & design** — RDKit properties, permeability, GLP-1-style modifications (Obj 3) |
 | `src/06.*` | **Free-energy calculations** — ABFE / relative FEP / metadynamics task bundles (Obj 4) |
 | `src/07.*` | **Manuscript assembly** — figures, tables, text |
@@ -209,15 +218,22 @@ System prep is the mature, low-risk backbone of the project. Key decisions logge
 - **Gate:** Objective-1 comparative interaction figure + Objective-2 candidate mutation table (feeds Phase 6).
 
 ### Phase 4 — Production MD & simulation QC  *(cluster, wall-clock weeks; analysis local)*
-- Production: **≥ 3 independent replicas**, several hundred ns each (µs aspirational), for the ZH853
-  complex; optionally a DAMGO or endomorphin-1 complex as a comparator ensemble.
-- **QC dashboard** (`product/…_qc_YYYYMMDD`): backbone Cα RMSD (plateau), RMSF (pre-aligned),
-  **receptor-aligned ligand RMSD**, key-contact occupancy, membrane APL / thickness / S_CD order
-  parameters, box/density; error bars from replicate spread + block averaging. Report per references §8.
-- **Mutant simulations** for the top Phase-3 candidates (in-silico mutagenesis + MD) to check pocket
-  integrity and ZH853-contact disruption.
+- Production: **≥ 3 independent replicas**, 500 ns each (µs aspirational), per system —
+  `ZH_REPLICAS`/`ZH_PROD_NS` in each build's `sampling.env`. The panel is apo + four cyclic
+  peptides × D2.50 ASP/ASH.
+- **Analysis stage implemented** — `src/02.11.00_simulation_analysis/` (see its README):
+  - *reduction* (cluster, one SLURM array task per replica) → `intermediate/02.11.00_analysis/`;
+  - *aggregation + figures* (local) → `product/02.11.00_*`: QC dashboard (Cα RMSD, RMSF,
+    receptor-aligned ligand RMSD, APL, thickness, density, OPM registration, disulfide),
+    contact occupancy with replicate error bars, activation rulers, the D2.50 Na⁺ site.
+  - *convergence*: equilibration detection by maximum effective sample size, statistical
+    inefficiency, blocking curves, R-hat across replicas, PCA cosine content (**D-20**).
+- **Still to do:** run it on the finished replicas; **mutant simulations** for the top Phase-3
+  candidates (in-silico mutagenesis + MD) to check pocket integrity and ZH853-contact disruption;
+  lipid S_CD order parameters (deferred — thickness and APL carry the bilayer QC for now).
 - **Gate:** documented convergence assessment (not RMSD-plateau alone) and a QC report establishing
-  simulation quality before any quantitative claims.
+  simulation quality before any quantitative claims. *(The machinery for this gate now exists; the
+  gate itself is not yet passed — no production trajectory has been through it.)*
 
 ### Phase 5 — Analog cheminformatics & drug-likeness design  *(local, 3–5 days)* — **Objective 3**
 - Property panel with RDKit for ZH853 + analogs (already: TPSA 235–280, HBD 8–10, MW 714–810,

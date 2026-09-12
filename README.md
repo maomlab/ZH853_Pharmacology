@@ -61,7 +61,9 @@ Run `make help` for the grouped target list.
 | 5 | Ligand force-field parameters | `./submit.sh params` (4-task array) | cluster (CPU) |
 | 6 | Build the membrane systems | `./submit.sh build` (10-task array) | cluster (CPU) |
 | 7 | Equilibrate → pre-produce → produce | `./submit.sh all-simulations` (or `eq` / `preprod` / `prod`) | cluster (GPU) |
-| 8 | Trajectory QC | `04_analyze.py` | cluster |
+| 8 | Trajectory QC (per replica, smoke test) | `04_analyze.py` | cluster |
+| 9 | Reduce the production trajectories | `./submit_reduce.sh` (one task per replica) | cluster (CPU) |
+| 10 | Simulation QC + interaction analysis | `make simulation-analysis` | local |
 
 **Steps 5–8 are the SLURM bundle. Follow
 [`src/02.10.00_slurm_bundle/README.md`](src/02.10.00_slurm_bundle/README.md)** — it is the
@@ -125,6 +127,24 @@ To run either without SLURM, the underlying commands still work directly:
 
 Then, from each build directory, `./submit.sh all-simulations`.
 
+### Steps 9–10 — analysing what came out
+
+[`src/02.11.00_simulation_analysis/`](src/02.11.00_simulation_analysis/README.md) answers the two
+questions production raises: **is the sampling reliable** (equilibration detection, effective
+sample size, blocking, replica agreement, PCA cosine content — not an RMSD plateau alone) and
+**what does it say** (contact occupancy with replicate error bars against the same 4.5 Å criterion
+as the static fingerprint, direct vs water-mediated anchors, ZH853-minus-analog differences, the
+activation rulers, and the D2.50 ASP/ASH comparison).
+
+It is split across the two machines for one reason: the trajectories are ~100 GB and stay on the
+cluster, while the reduction writes a few hundred kB per replica.
+
+```bash
+cd src/02.11.00_simulation_analysis && ./submit_reduce.sh   # cluster, CPU array
+scp -r $CLUSTER:$REPO/intermediate/02.11.00_analysis intermediate/    # a few MB
+make simulation-analysis                                    # local: tables, report, figures
+```
+
 ## Status
 Phases 0–1 and static interaction analysis (Phase 3) complete — see [`docs/PLAN.md`](docs/PLAN.md)
 and [`docs/RESULTS_interactions.md`](docs/RESULTS_interactions.md). Key findings: ZH853 keeps the
@@ -135,11 +155,13 @@ all analogs are beyond-Ro5; two design series proposed (N-methylation for permea
 half-life).
 
 **Phase 2/4 (MD) in progress.** The SLURM bundle builds and runs all ten systems; cluster settings
-that were OQ-3 now live in one `cluster.env`. The **apo/ASP** arm is furthest along — built,
-equilibrated, and through an unrestrained pre-production leg (measured on the H200 nodes: 94.4 ns/day
-at 2 fs, 587 ns/day at 4 fs, so ~25 h end to end per system). The ligand arms are not yet built.
-Open items: RESP charges still use the AM1-BCC route pending the QM-engine question (the remaining
-`TODO(OQ-3)` in `src/02.08.00_ligand_parameterize.sh`); MD occupancy validation; Phase 6 free energy.
+that were OQ-3 now live in one `cluster.env`. The **apo** arm is furthest along — built,
+equilibrated, and into production (apo/ASH; measured on the H200 nodes: 94.4 ns/day at 2 fs,
+587 ns/day at 4 fs, so ~25 h end to end per system). The analysis stage
+([`src/02.11.00_simulation_analysis/`](src/02.11.00_simulation_analysis/README.md)) is written and
+unit-tested but has not yet been run on a finished production trajectory. Open items: RESP charges
+still use the AM1-BCC route pending the QM-engine question (the remaining `TODO(OQ-3)` in
+`src/02.08.00_ligand_parameterize.sh`); the remaining arms of the panel; Phase 6 free energy.
 
 ## Environment
 Four conda environments, created from the specs in the repo root:

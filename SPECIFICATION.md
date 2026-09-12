@@ -82,6 +82,35 @@ This file records decisions, clarifications, and conventions made as the ZH853â€
   duplicating the prep/orient chain. The two variants differ only in protonation, so sharing one
   prepared and OPM-oriented receptor guarantees the comparison is not confounded by a differing
   starting geometry (D-11). (2026-07-26)
+- **D-18 (production analysis is a two-machine pipeline):** Trajectory reduction
+  (`02.11.00/01_reduce_trajectory.py`) runs **on the cluster**, one SLURM array task per replica, and
+  writes a few hundred kB per replica; aggregation and figures run **locally** on those files. Reason:
+  the panel is ~100 GB of DCD (3 replicas x 500 ns x up to 10 systems at 100 ps sampling), which is
+  not worth moving, while every table and figure must be re-derivable in seconds without a
+  trajectory. Consequence: anything the figures may ever want must be computed in the single
+  reduction pass, so the reduction stores the full per-residue contact matrix, not just the
+  anchors. (2026-09-12)
+- **D-19 (MD residue numbers come from `receptor.pdb`, not the prmtop):** tleap renumbers the system
+  from 1, so a prmtop residue id is not the human OPRM1 number the rest of the project speaks
+  (D149, E231, H299...). `zh853mor.md.construct_residue_map` transfers the numbering positionally
+  from the staged `receptor.pdb`, which keeps 69-349, and **refuses** if the residue names disagree.
+  Reason: analysing by raw prmtop resid reports the wrong residues while still producing plausible
+  numbers -- there is no error to notice. This is also why the 4.5 A shell is recomputed for every
+  residue rather than only for a hard-coded key set. (2026-09-12)
+- **D-20 (convergence is judged on four diagnostics, not an RMSD plateau):** effective sample size
+  after automatic equilibration detection (Chodera 2016), a blocking curve, R-hat across replicas,
+  and the Hess cosine content of the leading PCs. Thresholds: n_eff >= 20 per replica,
+  R-hat <= 1.2, PC1 cosine content <= 0.5. Reason: a plateaued, correlated series yields error bars
+  that are too small by sqrt(g), with g routinely 10-100 for pocket observables at 100 ps sampling;
+  and the first PC of a too-short run reproduces the half-cosine of free diffusion, which looks
+  exactly like a slow collective motion. Consequence: with 3 replicas R-hat is a flag, not a
+  measurement, and the QC report says so. (2026-09-12)
+- **D-21 (MD contact criterion is the static one):** occupancy uses the same heavy-atom cutoffs as
+  `zh853mor.interactions` (contact 4.5 A, polar/H-bond 3.5 A, ionic 4.0 A; D-9), imported rather
+  than restated, so an MD occupancy and a cryo-EM fingerprint entry mean the same thing and
+  Objective 1 can be read across the two. Water-mediated contacts are counted separately (a water O
+  within 3.5 A of both partners) because the canonical H6.52 interaction is water-bridged and a
+  direct-contact count alone scores it as absent. (2026-09-12)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which
