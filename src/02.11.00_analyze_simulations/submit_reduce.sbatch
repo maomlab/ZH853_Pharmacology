@@ -1,6 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=zh853_reduce
-#SBATCH --output=reduce_%A_%a.out
+#SBATCH --output=../../intermediate/02.11.00_analyze_simulations/logs/reduce_%A_%a.out
+#
+# The output path is relative to the SUBMISSION directory, i.e. to this stage directory,
+# and points into intermediate/ so no log is written into src/ (D-16). submit_reduce.sh
+# creates that directory and passes an absolute path; submitting this file BY HAND needs
+#     mkdir -p ../../intermediate/02.11.00_analyze_simulations/logs
+# first -- SLURM cannot start a job whose output file it cannot open.
 #
 # CPU stage: reduce ONE production replica per array task. Reading a 500 ns / 5 GB DCD is I/O and
 # single-core bound, so the replicas of the whole panel run concurrently instead of serially, and

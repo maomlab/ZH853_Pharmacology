@@ -73,8 +73,16 @@ if [ $((N_WRITING + N_PARTIAL + N_BAD)) -gt 0 ]; then
   echo "  to 01_reduce_trajectory.py directly instead of submitting the whole array."
 fi
 
+# SLURM writes --output relative to the submission directory, which is this stage directory under
+# src/ -- where generated files do not belong (D-16). Keep the logs with the data this stage
+# produces instead. The directory must exist before sbatch runs: a job whose output file cannot be
+# opened does not start.
+LOGS="$(cd "$HERE/../.." && pwd)/intermediate/02.11.00_analyze_simulations/logs"
+[ "$DRY" -eq 1 ] || mkdir -p "$LOGS" || die "cannot create the log directory $LOGS."
+
 SBATCH_ARGS=(
   --account="$ZH_ACCOUNT"
+  --output="$LOGS/reduce_%A_%a.out"
   --partition="$ZH_CPU_PARTITION"
   --time="$ZH_CPU_TIME"
   --cpus-per-task="$ZH_CPU_CPUS"
@@ -97,6 +105,7 @@ fi
 jid=$(cd "$HERE" && sbatch --parsable "${SBATCH_ARGS[@]}" submit_reduce.sbatch \
         ${EXTRA[@]+"${EXTRA[@]}"})
 echo "submitted reduction: $jid   ($N replicas, one per array task)"
-echo "  -> intermediate/02.11.00_analysis/<system>/<replica>.{npz,json}"
+echo "  -> intermediate/02.11.00_analyze_simulations/<system>/<replica>.{npz,json}"
+echo "  logs: intermediate/02.11.00_analyze_simulations/logs/reduce_${jid}_*.out"
 echo "then, on a machine with the LOCAL env:"
 echo "    make sim-aggregate sim-figures"

@@ -25,7 +25,7 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 >
 > **Update 2026-09-12.** Cluster settings are resolved (`cluster.env`; OQ-3 closed for the MD
 > stages) and the panel is building/running — the apo arm is in production. **Phase 4 analysis is
-> implemented**: `src/02.11.00_simulation_analysis/` reduces each replica on the cluster and
+> implemented**: `src/02.11.00_analyze_simulations/` reduces each replica on the cluster and
 > aggregates locally into QC verdicts, occupancy tables with replicate error bars, a convergence
 > assessment (n_eff, blocking, R-hat, PCA cosine content — D-20) and four figures. It has been
 > exercised end to end on a synthetic system but **not yet on a finished production trajectory**,
@@ -221,8 +221,8 @@ System prep is the mature, low-risk backbone of the project. Key decisions logge
 - Production: **≥ 3 independent replicas**, 500 ns each (µs aspirational), per system —
   `ZH_REPLICAS`/`ZH_PROD_NS` in each build's `sampling.env`. The panel is apo + four cyclic
   peptides × D2.50 ASP/ASH.
-- **Analysis stage implemented** — `src/02.11.00_simulation_analysis/` (see its README):
-  - *reduction* (cluster, one SLURM array task per replica) → `intermediate/02.11.00_analysis/`;
+- **Analysis stage implemented** — `src/02.11.00_analyze_simulations/` (see its README):
+  - *reduction* (cluster, one SLURM array task per replica) → `intermediate/02.11.00_analyze_simulations/`;
   - *aggregation + figures* (local) → `product/02.11.00_*`: QC dashboard (Cα RMSD, RMSF,
     receptor-aligned ligand RMSD, APL, thickness, density, OPM registration, disulfide),
     contact occupancy with replicate error bars, activation rulers, the D2.50 Na⁺ site.

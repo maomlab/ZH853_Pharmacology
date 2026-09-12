@@ -22,8 +22,20 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# SLURM writes --output relative to the SUBMISSION directory. The GPU stages are submitted from a
+# build directory, so their logs already land under intermediate/; the two CPU stages are
+# submitted from HERE, which is src/, where generated files do not belong (D-16). Send those to
+# the intermediate directory of the step that produces the data, so a job's log sits with its
+# output rather than in the source tree.
+logdir() {  # logdir <intermediate subdirectory> -> absolute logs path, created unless dry-running
+  local d="$REPO/intermediate/$1/logs"
+  [ "${DRY:-0}" -eq 1 ] || mkdir -p "$d" || die "cannot create the log directory $d."
+  printf '%s\n' "$d"
+}
 
 usage() {
   sed -n '2,21p' "${BASH_SOURCE[0]}" | sed -e 's/^#$//' -e 's/^# //'
@@ -187,9 +199,10 @@ case "$STAGE" in
     n=$N_LIGANDS                  # registry entries that have a ligand
     jid=$(submit submit_parameterize.sbatch --time="$ZH_CPU_TIME" \
                  --cpus-per-task="$ZH_CPU_CPUS" --mem="$ZH_CPU_MEM" --array="1-${n}" \
-                 --job-name=zh853_params --output=params_%A_%a.out)
+                 --job-name=zh853_params \
+                 --output="$(logdir 02.08.00_ligand_params)/params_%A_%a.out")
     echo "submitted parameterization: $jid   ($n ligands, one per array task)"
-    echo "  -> intermediate/02.08.00_ligand_params/<LIGAND>/"
+    echo "  -> intermediate/02.08.00_ligand_params/<LIGAND>/   (logs: .../logs/params_*.out)"
     echo "then: ./submit.sh build"
     ;;
   build)
@@ -197,9 +210,10 @@ case "$STAGE" in
     n=$((N_SYSTEMS * 2))          # every system x {ASP, ASH}
     jid=$(submit submit_build.sbatch --time="$ZH_CPU_TIME" \
                  --cpus-per-task="$ZH_CPU_CPUS" --mem="$ZH_CPU_MEM" --array="1-${n}" \
-                 --job-name=zh853_build --output=build_%A_%a.out)
+                 --job-name=zh853_build \
+                 --output="$(logdir 02.10.00_build)/build_%A_%a.out")
     echo "submitted builds: $jid   ($N_SYSTEMS systems x 2 D2.50 states = $n array tasks)"
-    echo "  -> intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/"
+    echo "  -> intermediate/02.10.00_build/<LIGAND>_<D250>_<timestamp>/   (logs: .../logs/build_*.out)"
     echo "then, from each build directory: ./submit.sh all-simulations"
     ;;
   check)

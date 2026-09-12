@@ -1,6 +1,6 @@
 """Trajectory-analysis primitives for the production membrane simulations.
 
-Shared by `src/02.11.00_simulation_analysis/`: the per-replica reduction runs on the cluster
+Shared by `src/02.11.00_analyze_simulations/`: the per-replica reduction runs on the cluster
 (where the trajectories are), the aggregation and figures run locally on what it writes. Both
 import this module, so a selection or a cutoff is defined once.
 
@@ -497,7 +497,7 @@ class ReplicaResult:
 
 
 def load_replicas(root: Path) -> list[ReplicaResult]:
-    """Every reduced replica under `root` (intermediate/02.11.00_analysis/<system>/<rep>.json)."""
+    """Every reduced replica under `root` (intermediate/02.11.00_analyze_simulations/<system>/<rep>.json)."""
     out = []
     for js in sorted(root.glob("*/*.json")):
         npz = js.with_suffix(".npz")

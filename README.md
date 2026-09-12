@@ -119,6 +119,10 @@ cd src/02.10.00_slurm_bundle
 
 Add `-n` to either to print the `sbatch` command without submitting. They request
 `ZH_CPU_PARTITION` and **no GPU** — holding one through PACKMOL-Memgen would waste the allocation.
+Both are submitted from `src/`, so their job logs are directed to
+`intermediate/02.08.00_ligand_params/logs/` and `intermediate/02.10.00_build/logs/` rather than
+beside the scripts (D-16/D-22); the GPU stages are submitted from a build directory and their logs
+already sit with the trajectory.
 Parallel builds are safe by construction: each writes to its own timestamped directory, which is
 why `01_build_system.sh` insists on a pristine one.
 
@@ -129,7 +133,7 @@ Then, from each build directory, `./submit.sh all-simulations`.
 
 ### Steps 9–10 — analysing what came out
 
-[`src/02.11.00_simulation_analysis/`](src/02.11.00_simulation_analysis/README.md) answers the two
+[`src/02.11.00_analyze_simulations/`](src/02.11.00_analyze_simulations/README.md) answers the two
 questions production raises: **is the sampling reliable** (equilibration detection, effective
 sample size, blocking, replica agreement, PCA cosine content — not an RMSD plateau alone) and
 **what does it say** (contact occupancy with replicate error bars against the same 4.5 Å criterion
@@ -140,8 +144,8 @@ It is split across the two machines for one reason: the trajectories are ~100 GB
 cluster, while the reduction writes a few hundred kB per replica.
 
 ```bash
-cd src/02.11.00_simulation_analysis && ./submit_reduce.sh   # cluster, CPU array
-scp -r $CLUSTER:$REPO/intermediate/02.11.00_analysis intermediate/    # a few MB
+cd src/02.11.00_analyze_simulations && ./submit_reduce.sh   # cluster, CPU array
+scp -r $CLUSTER:$REPO/intermediate/02.11.00_analyze_simulations intermediate/    # a few MB
 make simulation-analysis                                    # local: tables, report, figures
 ```
 
@@ -158,7 +162,7 @@ half-life).
 that were OQ-3 now live in one `cluster.env`. The **apo** arm is furthest along — built,
 equilibrated, and into production (apo/ASH; measured on the H200 nodes: 94.4 ns/day at 2 fs,
 587 ns/day at 4 fs, so ~25 h end to end per system). The analysis stage
-([`src/02.11.00_simulation_analysis/`](src/02.11.00_simulation_analysis/README.md)) is written and
+([`src/02.11.00_analyze_simulations/`](src/02.11.00_analyze_simulations/README.md)) is written and
 unit-tested but has not yet been run on a finished production trajectory. Open items: RESP charges
 still use the AM1-BCC route pending the QM-engine question (the remaining `TODO(OQ-3)` in
 `src/02.08.00_ligand_parameterize.sh`); the remaining arms of the panel; Phase 6 free energy.

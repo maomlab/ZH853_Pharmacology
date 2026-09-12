@@ -13,7 +13,7 @@ judges convergence rather than assuming it.
 
 | Step | Runs | Env | Reads | Writes |
 |---|---|---|---|---|
-| `01_reduce_trajectory.py` | **cluster** (CPU, job array) | `zh853mor-prep` | `intermediate/02.10.00_build/<system>/prod_r*.dcd` | `intermediate/02.11.00_analysis/<system>/<replica>.{npz,json}` |
+| `01_reduce_trajectory.py` | **cluster** (CPU, job array) | `zh853mor-prep` | `intermediate/02.10.00_build/<system>/prod_r*.dcd` | `intermediate/02.11.00_analyze_simulations/<system>/<replica>.{npz,json}` |
 | `02_aggregate.py` | **local** | `zh853mor-local` | those `.npz`/`.json` | `product/02.11.00_*.{csv,md}` |
 | `03_figures.py` | **local** | `zh853mor-local` | those `.npz`/`.json` | `product/02.11.00_*.png` |
 
@@ -27,7 +27,7 @@ be regenerated on a laptop in seconds without touching a trajectory.
 On the cluster, after production has finished:
 
 ```bash
-cd src/02.11.00_simulation_analysis
+cd src/02.11.00_analyze_simulations
 ./submit_reduce.sh -n          # dry run: shows the inventory and the sbatch command, submits nothing
 ./submit_reduce.sh             # one array task per replica; resources from the root cluster.env
 ```
@@ -61,11 +61,15 @@ or, for a single replica without SLURM (a few minutes):
 python 01_reduce_trajectory.py --build ../../intermediate/02.10.00_build/apo_ASH_20260901_133002
 ```
 
-Then bring `intermediate/02.11.00_analysis/` to the machine with the local env and:
+Then bring `intermediate/02.11.00_analyze_simulations/` to the machine with the local env and:
 
 ```bash
 make sim-aggregate sim-figures      # or run 02_aggregate.py / 03_figures.py directly
 ```
+
+Job logs go to `intermediate/02.11.00_analyze_simulations/logs/reduce_<jobid>_<task>.out` — the
+stage is submitted from `src/`, where generated files do not belong (D-16/D-22). `submit_reduce.sh`
+creates that directory; submitting `submit_reduce.sbatch` by hand needs the `mkdir -p` first.
 
 `01_reduce_trajectory.py` skips a replica whose `.json` already exists — rerun with `--force` after
 changing what is measured. `--stride N` subsamples frames for a quick look.

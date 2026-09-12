@@ -12,7 +12,7 @@ Four figures, one per question:
 Every panel that needs data not present is skipped with a note rather than drawn empty, so the
 figures are usable while only part of the panel of systems has run.
 
-Run: ``python src/02.11.00_simulation_analysis/03_figures.py``  (or ``make sim-figures``).
+Run: ``python src/02.11.00_analyze_simulations/03_figures.py``  (or ``make sim-figures``).
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ import numpy as np  # noqa: E402
 from zh853mor import convergence as cv  # noqa: E402
 from zh853mor import md, paths, structure  # noqa: E402
 
-ANALYSIS_ROOT = paths.INTERMEDIATE / "02.11.00_analysis"
+ANALYSIS_ROOT = paths.INTERMEDIATE / "02.11.00_analyze_simulations"
 PREFIX = "02.11.00"
 NA_SITE_CUT = 3.2  # A; matches 02_aggregate.py
 

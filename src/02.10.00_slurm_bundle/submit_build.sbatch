@@ -1,6 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=zh853_build
-#SBATCH --output=build_%A_%a.out
+#SBATCH --output=../../intermediate/02.10.00_build/logs/build_%A_%a.out
+#
+# The output path is relative to the SUBMISSION directory, i.e. to this bundle, and
+# points into intermediate/ so no log is written into src/ (D-16). submit.sh creates
+# that directory and passes an absolute path; submitting this file BY HAND needs the
+#     mkdir -p ../../intermediate/02.10.00_build/logs
+# first -- SLURM cannot start a job whose output file it cannot open.
 #
 # CPU stage: build the membrane systems, ONE (LIGAND, D2.50) COMBINATION PER ARRAY TASK, so the
 # ten builds run concurrently instead of ~2.5 h of PACKMOL-Memgen serially on a login node.

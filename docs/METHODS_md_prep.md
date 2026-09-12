@@ -60,7 +60,7 @@ cross-check.
 - **Per-replica QC** (`04_analyze.py`): backbone RMSD, pre-aligned RMSF, **receptor-aligned ligand
   RMSD**, key-contact occupancy, membrane APL — a smoke test that one run produced something sane.
 
-## 6. Production analysis (`02.11.00_simulation_analysis/`)
+## 6. Production analysis (`02.11.00_analyze_simulations/`)
 Two machines by design (D-18): each replica is reduced **on the cluster** (one SLURM array task;
 the panel is ~100 GB of trajectory) to a few hundred kB of observables, and aggregation, tables and
 figures run **locally** on those.

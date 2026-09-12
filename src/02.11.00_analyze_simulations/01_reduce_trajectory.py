@@ -28,7 +28,7 @@ Usage (from anywhere; paths are resolved against the repository):
     python 01_reduce_trajectory.py --list                      # (build, replica) pairs, numbered
     python 01_reduce_trajectory.py --index 4                   # the 4th pair (SLURM array task)
 
-Writes intermediate/02.11.00_analysis/<ligand>_<D250>/<replica>.{npz,json}.
+Writes intermediate/02.11.00_analyze_simulations/<ligand>_<D250>/<replica>.{npz,json}.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ from zh853mor import convergence as cv  # noqa: E402
 from zh853mor import md, paths  # noqa: E402
 
 BUILD_ROOT = paths.INTERMEDIATE / "02.10.00_build"
-OUT_ROOT = paths.INTERMEDIATE / "02.11.00_analysis"
+OUT_ROOT = paths.INTERMEDIATE / "02.11.00_analyze_simulations"
 
 # Equilibration is detected on ONE observable and applied to all of them, so that every mean for a
 # replica describes the same window. The TM-only Ca RMSD is the right choice: it is the slowest

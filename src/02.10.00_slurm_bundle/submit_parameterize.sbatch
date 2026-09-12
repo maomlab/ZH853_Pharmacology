@@ -1,6 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=zh853_params
-#SBATCH --output=params_%A_%a.out
+#SBATCH --output=../../intermediate/02.08.00_ligand_params/logs/params_%A_%a.out
+#
+# The output path is relative to the SUBMISSION directory, i.e. to this bundle, and
+# points into intermediate/ so no log is written into src/ (D-16). submit.sh creates
+# that directory and passes an absolute path; submitting this file BY HAND needs the
+#     mkdir -p ../../intermediate/02.08.00_ligand_params/logs
+# first -- SLURM cannot start a job whose output file it cannot open.
 #
 # CPU stage: GAFF2/AM1-BCC parameters, ONE LIGAND PER ARRAY TASK so the four run concurrently
 # instead of ~4 x sqm serially on a login node.

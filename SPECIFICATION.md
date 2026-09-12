@@ -12,6 +12,12 @@ This file records decisions, clarifications, and conventions made as the ZH853�
 - **`src/` holds only workflows; everything generated goes to `intermediate/`** (D-16). Scripts run
   from `src/` must never write beside themselves — a build directory under `src/` is both untracked
   clutter and, for PACKMOL-Memgen, an active hazard (it reuses component PDBs it finds in its CWD).
+  This includes **SLURM job logs**: a stage submitted from `src/` directs `--output` into the
+  intermediate directory of the step that produces the data (see D-22).
+- **Naming:** a workflow step is named for what it *does* — `##.##.##_<verb>_<object>`
+  (`02.03.00_prepare_receptor.py`, `02.11.00_analyze_simulations/`) — and the intermediate
+  directory it writes to carries the **same** name (`intermediate/02.11.00_analyze_simulations/`),
+  so a step, its cache and its products are found by one string.
 
 ## Decisions (resolved)
 - **D-1 (numbering):** Use human OPRM1 P35372 numbering as the project standard; verified against the
@@ -111,6 +117,15 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   Objective 1 can be read across the two. Water-mediated contacts are counted separately (a water O
   within 3.5 A of both partners) because the canonical H6.52 interaction is water-bridged and a
   direct-contact count alone scores it as absent. (2026-09-12)
+- **D-22 (SLURM logs live with the data, not in `src/`):** `--output` is resolved relative to the
+  submission directory, so the stages submitted from a `src/` directory (`./submit.sh params` and
+  `build`, and `02.11.00`'s `submit_reduce.sh`) write their `.out` files into
+  `intermediate/<the step's directory>/logs/`; the GPU stages, submitted from a build directory,
+  already land beside their trajectory and are unchanged. The submit scripts create the directory
+  first, because SLURM cannot start a job whose output file it cannot open, and each `.sbatch`
+  header names the same path relative to its own directory so a hand-submitted job behaves the
+  same. Reason: D-16 — `src/` is source, and a job array otherwise drops one `.out` per task into
+  it. (2026-09-12)
 
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which

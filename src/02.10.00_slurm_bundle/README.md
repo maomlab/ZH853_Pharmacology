@@ -180,6 +180,25 @@ you `cd` into and submit from. Nothing in steps 3–5 is invoked out of `src/`.
 | 4 | `./submit.sh prod` → `submit_production.sbatch` → `03_production.py` | `zh853mor-sim` | GPU | the build directory |
 | 5 | `04_analyze.py` | `zh853mor-sim` | CPU | the build directory |
 
+### Where the job logs go
+
+SLURM writes `--output` relative to the **submission** directory. The GPU stages are submitted from
+a build directory, so `eq_*.out`, `preprod_*.out`, `prod_*.out` and `gpucheck_*.out` sit with the
+run they describe. The two CPU array stages are submitted from this bundle, i.e. from `src/`, where
+generated files do not belong (D-16), so their logs are directed into the intermediate directory of
+the step that produces the data:
+
+| Stage | Log |
+|---|---|
+| `./submit.sh params` | `intermediate/02.08.00_ligand_params/logs/params_<jobid>_<task>.out` |
+| `./submit.sh build` | `intermediate/02.10.00_build/logs/build_<jobid>_<task>.out` |
+| `./submit.sh check \| eq \| preprod \| prod` | the build directory, beside the trajectory |
+
+`submit.sh` creates the log directory before submitting. Submitting a `.sbatch` **by hand** needs
+that `mkdir -p` first: SLURM cannot start a job whose output file it cannot open. Each job script's
+own `#SBATCH --output` names the same path relative to the bundle, so a hand-submitted job also
+stays out of `src/`.
+
 ### Building the system (step 2)
 
 ```bash
