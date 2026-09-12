@@ -10,20 +10,31 @@ Step 5; run from the build directory, once per replica (CPU is fine):
 
     python 04_analyze.py --top system.prmtop --traj prod_r1.dcd --lig LIG --out qc_r1
 
-`--lig` must match the ligand residue name in the prmtop (the residue name in ZH853.mol2), and
-`--receptor` the receptor selection; both are empty selections on an apo build.
+`--lig` must match the ligand residue name in the prmtop (the residue name in ZH853.mol2); on an
+apo build it is `apo` and the ligand metrics are skipped. `--receptor` selects the receptor: an
+Amber prmtop carries no chain/segment records, so this is a resname-based selection (`protein`),
+not `segid`/`chainID`.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 import MDAnalysis as mda
 import numpy as np
 from MDAnalysis.analysis import align, rms
 
 KEY_CONTACTS = [149, 231, 299, 321, 328]  # D3.32, E231(ECL2), H6.52, H7.36, Y7.43 (Objective 1)
+
+
+def residue_census(u, limit=14):
+    """(resname, count) by descending count -- what the topology actually contains."""
+    counts = {}
+    for r in u.residues:
+        counts[r.resname.strip()] = counts.get(r.resname.strip(), 0) + 1
+    return sorted(counts.items(), key=lambda kv: -kv[1])[:limit]
 
 
 def main() -> None:
@@ -33,7 +44,8 @@ def main() -> None:
     ap.add_argument("--lig", default=None,
                     help="ligand resname; defaults to system.json's, else LIG. 'apo' (or a "
                          "resname matching nothing) skips the ligand metrics")
-    ap.add_argument("--receptor", default="segid R")
+    ap.add_argument("--receptor", default="protein",
+                    help="receptor selection; the prmtop has no chains, so select by residue")
     ap.add_argument("--out", default="qc")
     args = ap.parse_args()
 
@@ -52,13 +64,26 @@ def main() -> None:
     ref = mda.Universe(args.top, args.traj)
     ref.trajectory[0]
 
+    # An Amber prmtop carries NO chain/segment records -- MDAnalysis names its single segment
+    # SYSTEM -- so a chain-style selection such as `segid R` matches nothing. An empty selection
+    # does not raise where it is made: rms.RMSD reports 0.0 for zero atoms, and only AlignTraj
+    # fails, after the trajectory has been read, with a broadcast error that names neither the
+    # selection nor this script. Check it once, up front, and say which selection was empty.
+    ca_sel = f"{args.receptor} and name CA"
+    if not len(u.select_atoms(ca_sel)):
+        print(f"ERROR: '{ca_sel}' matches no atoms in {args.top}.", file=sys.stderr)
+        print("  Give --receptor a selection that does; the topology contains:", file=sys.stderr)
+        for name, n in residue_census(u):
+            print(f"    {name:<6} {n}", file=sys.stderr)
+        raise SystemExit(2)
+
     # backbone RMSD (aligned to frame 0 on receptor Cα)
-    rmsd = rms.RMSD(u, ref, select=f"{args.receptor} and name CA").run()
+    rmsd = rms.RMSD(u, ref, select=ca_sel).run()
     bb_rmsd = rmsd.results.rmsd[:, 2]  # columns are (frame, time, RMSD of `select`)
 
     # align whole trajectory on receptor Cα, then RMSF + receptor-aligned ligand RMSD
-    align.AlignTraj(u, ref, select=f"{args.receptor} and name CA", in_memory=True).run()
-    ca = u.select_atoms(f"{args.receptor} and name CA")
+    align.AlignTraj(u, ref, select=ca_sel, in_memory=True).run()
+    ca = u.select_atoms(ca_sel)
     rmsf = rms.RMSF(ca).run().results.rmsf
 
     # An apo build has no ligand: ligand RMSD and contact occupancy are undefined, and an empty
