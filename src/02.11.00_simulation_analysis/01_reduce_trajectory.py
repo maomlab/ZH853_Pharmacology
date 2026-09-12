@@ -437,8 +437,14 @@ def main() -> int:
         print(f"--- {job.build.name} / {job.replica}: {job.dcd}", flush=True)
         try:
             summary = reduce_replica(job, out_dir, stride=args.stride)
-        except (OSError, ValueError, SystemExit) as exc:
-            print(f"FAILED {job.build.name}/{job.replica}: {exc}", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 -- see below
+            # Deliberately broad: a replica killed at its wall-time leaves a TRUNCATED DCD, and
+            # the readers raise whatever their decompressor or parser happens to raise (EOFError,
+            # struct.error, ...). In a job array one unusable replica must not take the others
+            # with it, so the type is reported rather than filtered, and the exit code still says
+            # something failed.
+            print(f"FAILED {job.build.name}/{job.replica}: {type(exc).__name__}: {exc}",
+                  file=sys.stderr)
             failures += 1
             continue
         eq = summary["equilibration"]

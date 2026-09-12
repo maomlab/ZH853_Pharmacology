@@ -18,6 +18,10 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 DRY=0
 if [ "${1:-}" = "-n" ]; then DRY=1; shift; fi
 [ "${1:-}" = "--" ] && shift
+# Pass-through flags for 01_reduce_trajectory.py. Expanded below as ${EXTRA[@]+"${EXTRA[@]}"}:
+# "${EXTRA[@]-}" looks equivalent but expands an EMPTY array to one empty string, which sbatch
+# forwards to the job script and argparse then rejects with `unrecognized arguments:` -- every
+# task of the array failing on an argument nobody passed.
 EXTRA=("$@")
 
 # shellcheck source=../02.10.00_slurm_bundle/cluster_env.sh
@@ -51,10 +55,12 @@ if [ -n "${ZH_EXTRA_SBATCH:-}" ]; then
 fi
 
 if [ "$DRY" -eq 1 ]; then
-  echo "DRY RUN: sbatch ${SBATCH_ARGS[*]} $HERE/submit_reduce.sbatch ${EXTRA[*]-}"
+  echo "DRY RUN: sbatch ${SBATCH_ARGS[*]} $HERE/submit_reduce.sbatch" \
+       "${EXTRA[@]+${EXTRA[*]}}"
   exit 0
 fi
-jid=$(cd "$HERE" && sbatch --parsable "${SBATCH_ARGS[@]}" submit_reduce.sbatch "${EXTRA[@]-}")
+jid=$(cd "$HERE" && sbatch --parsable "${SBATCH_ARGS[@]}" submit_reduce.sbatch \
+        ${EXTRA[@]+"${EXTRA[@]}"})
 echo "submitted reduction: $jid   ($N replicas, one per array task)"
 echo "  -> intermediate/02.11.00_analysis/<system>/<replica>.{npz,json}"
 echo "then, on a machine with the LOCAL env:"
