@@ -54,7 +54,7 @@ def main() -> None:
 
     # backbone RMSD (aligned to frame 0 on receptor Cα)
     rmsd = rms.RMSD(u, ref, select=f"{args.receptor} and name CA").run()
-    bb_rmsd = rmsd.results.rmsd[:, 3]
+    bb_rmsd = rmsd.results.rmsd[:, 2]  # columns are (frame, time, RMSD of `select`)
 
     # align whole trajectory on receptor Cα, then RMSF + receptor-aligned ligand RMSD
     align.AlignTraj(u, ref, select=f"{args.receptor} and name CA", in_memory=True).run()
