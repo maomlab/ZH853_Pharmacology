@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" type="text/css" href="node_modules/molstar/build/viewer/molstar.css" />
+  <style>
+    html, body { margin: 0; padding: 0; background: #ffffff; }
+    /* #shot is what gets screenshotted. The caption CANNOT live inside #app: creating the
+       viewer replaces that element's children, which would delete it. */
+    #shot { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; }
+    #app { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+    .msp-viewport-controls, .msp-viewport-top-left-controls { display: none !important; }
+    #caption {
+      position: absolute; left: 18px; bottom: 14px; z-index: 100;
+      font: 13px/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif;
+      color: #222; pointer-events: none; white-space: pre;
+    }
+    #caption b { font-size: 15px; }
+    #legend {
+      position: absolute; right: 18px; bottom: 14px; z-index: 100;
+      font: 11px/1.6 -apple-system, "Helvetica Neue", Arial, sans-serif;
+      color: #444; pointer-events: none; text-align: right;
+    }
+    #legend span { display: inline-block; width: 9px; height: 9px; margin-right: 4px;
+                   border-radius: 2px; vertical-align: -1px; }
+  </style>
+</head>
+<body>
+  <div id="shot">
+    <div id="app"></div>
+    <div id="caption"></div>
+    <div id="legend"></div>
+  </div>
+  <script type="text/javascript" src="node_modules/molstar/build/viewer/molstar.js"></script>
+  <script type="text/javascript">
+    window.ready = false;
+    window.loaded = false;
+
+    async function initViewer(width, height) {
+      const shot = document.getElementById('shot');
+      shot.style.width = width + 'px';
+      shot.style.height = height + 'px';
+      window.viewer = await molstar.Viewer.create('app', {
+        layoutIsExpanded: false, layoutShowControls: false, layoutShowLog: false,
+        layoutShowSequence: false, layoutShowLeftPanel: false,
+        viewportShowExpand: false, viewportShowControls: false, viewportShowSettings: false,
+        viewportShowSelectionMode: false, viewportShowAnimation: false,
+        viewportShowTrajectoryControls: false,
+      });
+      // Outline only. The ambient-occlusion pass ACCUMULATES over successive draws, so a frame
+      // grabbed a fixed time after the state update is a different frame each time -- the render
+      // would flicker at exactly the rate the accumulation happens to land on. Outline is a
+      // single-pass effect and is what makes a cartoon read at video resolution anyway.
+      window.viewer.plugin.canvas3d.setProps({
+        renderer: { backgroundColor: 0xffffff },
+        postprocessing: {
+          outline: { name: 'on', params: { scale: 1, threshold: 0.25, color: 0x000000,
+                                           includeTransparent: true } },
+          occlusion: { name: 'off', params: {} },
+        },
+        camera: { helper: { axes: { name: 'off', params: {} } } },
+        multiSample: { mode: 'off' },
+      });
+      window.ready = true;
+    }
+
+    function b64ToBytes(b64) {
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    // Topology (PDB text) + coordinates (XTC bytes) -- MolStar's own trajectory route, the same
+    // one the desktop viewer uses for a GROMACS run, so the movie file needs no conversion.
+    async function loadMovie(pdbText, xtcBase64) {
+      const v = window.viewer;
+      await v.loadTrajectory({
+        model: { kind: 'model-data', data: pdbText, format: 'pdb' },
+        coordinates: { kind: 'coordinates-data', data: b64ToBytes(xtcBase64), format: 'xtc' },
+        preset: 'default',
+      });
+      window.frameCount = trajectoryFrameCount();
+      window.loaded = true;
+      return window.frameCount;
+    }
+
+    // Representations, built by hand rather than left to the default preset.
+    //
+    // The preset colours every chain from its own palette, which makes the ligand and a lipid
+    // indistinguishable at a glance and leaves no fixed key to put in a legend. Components are
+    // selected with PyMOL-syntax strings -- MolStar transpiles those natively, and the viewer
+    // bundle exports no MolScript builder to construct expressions any other way.
+    async function buildRepresentations(chains, colors) {
+      const plugin = window.viewer.plugin;
+      const hier = plugin.managers.structure.hierarchy.current;
+      if (!hier.structures.length) throw new Error('no structure to represent');
+      // Drop the preset's own components first, or its cartoon stays underneath ours.
+      await plugin.managers.structure.component.clear(hier.structures);
+      // The LAST structure is the coordinates-backed one; the first belongs to the topology PDB.
+      const structure = hier.structures[hier.structures.length - 1].cell;
+      const B = plugin.builders.structure;
+
+      const chainSel = list => (list && list.length)
+        ? 'chain ' + (Array.isArray(list) ? list.join('+') : list) : null;
+      const specs = [
+        ['receptor', chainSel(chains.receptor),
+          { type: 'cartoon', color: 'uniform', colorParams: { value: colors.receptor } }],
+        ['other', chainSel(chains.other_protein),
+          { type: 'cartoon', color: 'uniform', colorParams: { value: colors.other } }],
+        ['lipid', chainSel(chains.lipid),
+          { type: 'line', color: 'uniform', colorParams: { value: colors.lipid } }],
+        ['water', chainSel(chains.water),
+          { type: 'ball-and-stick', color: 'uniform', colorParams: { value: colors.water },
+            sizeParams: { sizeFactor: 0.18 } }],
+        ['ion', chainSel(chains.ion),
+          { type: 'spacefill', color: 'uniform', colorParams: { value: colors.ion },
+            sizeParams: { scale: 0.32 } }],
+        // Last, so it draws over the annulus: the ligand is the subject of every one of these.
+        ['ligand', chainSel(chains.ligand),
+          { type: 'ball-and-stick', color: 'uniform', colorParams: { value: colors.ligand },
+            sizeParams: { sizeFactor: 0.32 } }],
+      ];
+      const drawn = [];
+      for (const [key, expression, repr] of specs) {
+        if (!expression) continue;
+        const comp = await B.tryCreateComponent(structure, {
+          type: { name: 'script', params: { expression, language: 'pymol' } },
+          nullIfEmpty: true, label: key,
+        }, key);
+        if (!comp) continue;                       // absent in this system (apo, no membrane, ...)
+        await B.representation.addRepresentation(comp, repr);
+        drawn.push(key);
+      }
+      return drawn;
+    }
+
+    // The ModelFromTrajectory nodes that are worth stepping. Found by transformer id rather than
+    // by importing StateTransforms, which the viewer bundle does not export.
+    //
+    // loadTrajectory leaves TWO of them in the tree: one under `trajectory-from-pdb` (the
+    // topology, one frame -- it exists only so the coordinates have something to attach to) and
+    // one under `trajectory-from-model-and-coordinates` (the real one). Stepping the first is
+    // meaningless and stepping BOTH is what makes the movie stand still, so single-frame parents
+    // are skipped -- the same guard MolStar's own AnimateModelIndex applies.
+    function steppableCells() {
+      const state = window.viewer.plugin.state.data;
+      const out = [];
+      state.cells.forEach((cell, ref) => {
+        if (!cell.transform || !cell.transform.transformer) return;
+        if (!String(cell.transform.transformer.id).endsWith('model-from-trajectory')) return;
+        const parent = state.cells.get(cell.transform.parent);
+        const frames = parent && parent.obj && parent.obj.data
+          ? parent.obj.data.frameCount : 0;
+        if (frames > 1) out.push(ref);
+      });
+      return out;
+    }
+
+    function trajectoryFrameCount() {
+      const trajectories = window.viewer.plugin.managers.structure.hierarchy.current.trajectories;
+      if (!trajectories || !trajectories.length) return 0;
+      return Math.max(0, ...trajectories.map(
+        t => (t.cell.obj && t.cell.obj.data ? t.cell.obj.data.frameCount : 0)));
+    }
+
+    async function setFrame(i) {
+      const plugin = window.viewer.plugin;
+      const state = plugin.state.data;
+      const update = state.build();
+      const refs = steppableCells();
+      if (!refs.length) throw new Error('no multi-frame trajectory in the state tree');
+      for (const ref of refs) update.to(ref).update(old => ({ ...old, modelIndex: i }));
+      await update.commit();
+    }
+
+    // Resolve only once MolStar has actually put pixels on the canvas for the current state --
+    // a fixed sleep either wastes seconds per frame or grabs the previous frame.
+    function drawn(timeoutMs) {
+      const canvas3d = window.viewer.plugin.canvas3d;
+      return new Promise(resolve => {
+        let done = false;
+        // `let`, not `const`: didDraw can fire DURING subscribe, and the handler would then
+        // touch `sub` while it is still in its temporal dead zone.
+        let sub = null;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          if (sub) { try { sub.unsubscribe(); } catch (e) { /* already gone */ } }
+          resolve();
+        };
+        sub = canvas3d.didDraw.subscribe(finish);
+        canvas3d.requestDraw();
+        setTimeout(finish, timeoutMs || 4000);
+      });
+    }
+
+    // Membrane frame: looking along +y with +z up, so the bilayer normal is vertical and the
+    // extracellular side is at the top -- the same orientation as the dashboard's membrane panel,
+    // which only works because the movie was exported from an OPM-oriented build.
+    // `focus` is the bounding sphere of the RECEPTOR AND LIGAND, computed from the movie PDB by
+    // the caller. MolStar's own structure boundary would include the phosphate plane and the
+    // pocket waters, which stretch to the box faces and would frame the receptor as a speck.
+    async function setMembraneCamera(focus, zoom) {
+      const plugin = window.viewer.plugin;
+      const cam = plugin.canvas3d.camera;
+      const radius = focus.radius * (zoom || 1.15);
+      // getTargetDistance, not radius/tan(fov/2): it accounts for the viewport ASPECT RATIO, and
+      // on a 16:9 canvas the vertical field is the narrow one, so the hand-rolled distance crops
+      // the receptor top and bottom.
+      //
+      // The position and up vector are then set OUTRIGHT rather than through camera.focus().
+      // focus()'s `dir` and `up` arguments are only hints: Vec3.matchDirection flips the camera's
+      // CURRENT direction into the same hemisphere and keeps it otherwise, so asking for "+z up"
+      // yields whatever tilted up-vector already had a positive z -- the bilayer ends up at an
+      // angle, or upside down, depending on where the camera happened to be.
+      const dist = cam.getTargetDistance(radius);
+      const c = focus.center;
+      cam.setState({
+        target: [c[0], c[1], c[2]],
+        position: [c[0], c[1] - dist, c[2]],   // looking along +y
+        up: [0, 0, 1],                         // membrane normal vertical, extracellular up
+        radius: radius,
+      }, 0);
+      plugin.canvas3d.requestDraw();
+      await drawn();
+    }
+
+    function setCaption(html) { document.getElementById('caption').innerHTML = html; }
+    function setLegend(html) { document.getElementById('legend').innerHTML = html; }
+  </script>
+</body>
+</html>

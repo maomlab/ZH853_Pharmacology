@@ -1,0 +1,10 @@
+{
+  "name": "zh853-trajectory-movies",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless MolStar rendering of MOR production trajectories as movies",
+  "dependencies": {
+    "molstar": "^4.9.0",
+    "puppeteer": "^23.0.0"
+  }
+}

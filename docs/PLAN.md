@@ -31,6 +31,15 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > exercised end to end on a synthetic system but **not yet on a finished production trajectory**,
 > so no result below has changed. Next: run it on the completed replicas, then fold the numbers
 > into the manuscript's [prospective] placeholders.
+>
+> **Update 2026-09-14.** Phase 4 gains an **exploratory visual arm**:
+> `src/02.12.00_render_trajectory_movies/` exports each replica as a small, PBC-corrected,
+> superposed `pdb`/`xtc` pair on the cluster and renders it locally two ways — a matplotlib
+> diagnostic dashboard (structure and its own time series on one clock) and a headless MolStar
+> cartoon movie (D-23…D-25). It exists because `02.11.00` can only report on what it was told to
+> measure, and the failure modes worth catching early — a lipid in the orthosteric site, ECL2
+> lifting off, the receptor sliding along the membrane normal — all reach it as "the RMSD went
+> up". Like `02.11.00`, it has been exercised end to end on a synthetic system only.
 
 ---
 
@@ -228,6 +237,14 @@ System prep is the mature, low-risk backbone of the project. Key decisions logge
     contact occupancy with replicate error bars, activation rulers, the D2.50 Na⁺ site.
   - *convergence*: equilibration detection by maximum effective sample size, statistical
     inefficiency, blocking curves, R-hat across replicas, PCA cosine content (**D-20**).
+- **Movie stage implemented** — `src/02.12.00_render_trajectory_movies/` (see its README): the
+  exploratory counterpart to the measured analysis above, for finding what nobody thought to
+  measure. *Export* (cluster, one SLURM array task per replica) writes a viewable
+  `<replica>_movie.{pdb,xtc,json}` triple — molecules made whole, annular lipids and the most
+  persistent pocket waters kept, frames superposed on the TM Cα (**D-24**); *render* (local)
+  produces a diagnostic dashboard movie and a MolStar cartoon movie in `product/02.12.00_*`.
+  The exported pair also opens directly in VMD/PyMOL/ChimeraX for interactive inspection
+  (**D-23**), and every frame carries its simulated time and the movie's `ns/frame` (**D-25**).
 - **Still to do:** run it on the finished replicas; **mutant simulations** for the top Phase-3
   candidates (in-silico mutagenesis + MD) to check pocket integrity and ZH853-contact disruption;
   lipid S_CD order parameters (deferred — thickness and APL carry the bilayer QC for now).

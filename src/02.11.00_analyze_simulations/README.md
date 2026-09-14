@@ -106,6 +106,16 @@ and Na+ occupancy of the D2.50 site, the direct test of the ASP/ASH pair built u
 * **R-hat > 1.2** or **PC1 cosine content > 0.5** means the result is not converged, whatever the
   RMSD trace looks like.
 
+## When the numbers are not enough
+
+This stage reports on what it was told to measure. When a verdict is puzzling -- an RMSD step with
+no matching occupancy change, a replica that will not converge, a thickness drift with no obvious
+cause -- **watch the trajectory**:
+[`src/02.12.00_render_trajectory_movies/`](../02.12.00_render_trajectory_movies/README.md) exports
+each replica as a small, PBC-corrected, superposed PDB/XTC pair and renders it two ways, one of
+which puts the structure and the traces computed here on the same clock. A lipid in the
+orthosteric site and a rigid-body wobble of the Gi lobe both arrive here as "the RMSD went up".
+
 ## Known limits
 
 * Area per lipid is reported gross and hull-corrected. The convex hull overestimates the

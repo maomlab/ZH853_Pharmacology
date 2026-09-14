@@ -27,6 +27,7 @@
         prep-ZH853-protonate prep-receptor-orient prep-analogs-pose \
         prep-ligand-parameterize prep \
         sim-reduce sim-aggregate sim-figures simulation-analysis \
+        movie-export movie-dashboard movie-molstar movies \
         membrane-plot \
         molstar-render figures manuscript clean-intermediate
 
@@ -138,6 +139,20 @@ sim-figures:  ## 02.11.00  QC dashboard, convergence, occupancy, pocket dynamics
 	python src/02.11.00_analyze_simulations/03_figures.py
 
 simulation-analysis: sim-aggregate sim-figures  ## Full local MD analysis (after sim-reduce on the cluster)
+
+## Trajectory movies - Phase 4  [local env; step 01 runs ON THE CLUSTER; movie-molstar needs Node.js >= 18]
+# Same cluster/local split as 02.11.00 and for the same reason: movie-export reads the DCDs, which
+# stay on the cluster, and writes the few tens of MB per replica that the two renders work from.
+movie-export:  ## 02.12.00  Export viewable movie trajectories -> intermediate/ [CLUSTER: needs the DCDs + zh853mor-prep]
+	python src/02.12.00_render_trajectory_movies/01_export_movie_trajectory.py --all
+
+movie-dashboard:  ## 02.12.00  Diagnostic movies: structure + its own time series on one clock -> product/
+	python src/02.12.00_render_trajectory_movies/02_render_dashboard.py
+
+movie-molstar:  ## 02.12.00  Cartoon MolStar movies -> product/ (needs Node.js)
+	cd src/02.12.00_render_trajectory_movies && npm install --silent && node 03_render_molstar.js
+
+movies: movie-dashboard movie-molstar  ## Both movie renders (after movie-export on the cluster)
 
 ## Figures & manuscript  [LOCAL env (zh853mor-local); molstar-render also needs Node.js >= 18]
 membrane-plot: prep-receptor-orient  ## 03.04.00  Membrane-placement determination plot -> product/ (manuscript panel B)

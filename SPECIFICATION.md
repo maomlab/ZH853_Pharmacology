@@ -127,6 +127,33 @@ This file records decisions, clarifications, and conventions made as the ZH853â€
   same. Reason: D-16 â€” `src/` is source, and a job array otherwise drops one `.out` per task into
   it. (2026-09-12)
 
+- **D-23 (trajectory movies are a first-class analysis step, and a movie is an EXPORTED FILE
+  before it is a video):** `02.12.00` writes a `<replica>_movie.{pdb,xtc,json}` triple on the
+  cluster and renders locally, the same split as `02.11.00` and for the same reason (the DCDs stay
+  where they are). The exported pair is the deliverable: it opens in VMD/PyMOL/ChimeraX/MolStar,
+  so the two rendered movies are conveniences on top of it rather than the only way to look.
+  Reason: exploratory inspection is how failures that nobody thought to measure get found -- a
+  lipid tail entering the orthosteric site, ECL2 peeling off the lid, the receptor sliding along
+  the membrane normal -- and all of those reach `02.11.00` only as "the RMSD went up". (2026-09-14)
+- **D-24 (what the export fixes, and what it deliberately does not):** frames are unwrapped by
+  fragment and re-imaged around the protein (OpenMM wraps molecule by molecule, so the receptor
+  and its lipids are torn at the box faces and the ligand can sit a box length from its pocket);
+  the annular-lipid selection is the UNION over frames sampled across the whole run, because a
+  trajectory file has one atom count for every frame and "within 8 A" cannot be re-evaluated per
+  frame; pocket waters are instead RANKED by occupancy and truncated, because thousands pass
+  through in 500 ns and drawing them all hides the few that bridge a contact. Superposition is on
+  the same membrane-embedded CA set `02.11.00` measures its TM RMSD on. `--no-align` skips the
+  rotational fit *and* the z-centring, so drift, tilt and membrane registration stay visible,
+  while x and y are still centred (the box origin is arbitrary in the membrane plane). Both
+  renderers read the receptor/ligand chain assignment out of the JSON rather than re-deriving it,
+  so they cannot disagree about which chain is the subject. (2026-09-14)
+- **D-25 (the movie carries its own sampling caveat):** the export records `frame_spacing_ns` and
+  the caption on every rendered frame carries the simulated time, not just a frame index. Reason:
+  a 500 ns replica in 300 frames is one frame per 1.7 ns, and nothing faster than that -- a
+  rotamer flip, a water exchange, a transient contact -- is present rather than merely blurred.
+  `submit_export.sh` prints the ns/frame column before the array is submitted, so the decision to
+  raise `--frames` is made before the compute rather than after the movie disappoints. (2026-09-14)
+
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which
   software is preinstalled vs must be built (OpenMM, PLUMED, OpenFE, phenix/MolProbity, Gaussian/Psi4 for RESP)?
