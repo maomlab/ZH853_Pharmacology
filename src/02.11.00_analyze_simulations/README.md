@@ -117,6 +117,20 @@ and Na+ occupancy of the D2.50 site, the direct test of the ASP/ASH pair built u
   Ca RMSD, and the same window is then used for every observable of that replica.
 * **`n_eff`**, not the number of frames, is the sample size. A 5000-frame replica with g = 100
   carries 50 independent samples.
+* **`lig_rmsd_pose` is only a POSE RMSD when the deposited pose could be transferred.** It needs
+  every ligand atom name in the topology to appear exactly once in the build's `receptor.pdb`; if
+  it does not, the series falls back to measuring displacement from production frame 0, which
+  answers "did the ligand stay where it started" rather than "did it keep the cryo-EM binding
+  mode". Each replica's JSON records which was used under **`ligand_reference`**, and the
+  fallback is a `warnings` entry. To see the whole panel at once:
+
+  ```bash
+  python - <<'EOF'
+  import glob, json
+  for f in sorted(glob.glob("intermediate/02.11.00_analyze_simulations/*/prod_r*.json")):
+      print(f"{f:64s} {json.load(open(f))['ligand_reference']}")
+  EOF
+  ```
 * **R-hat > 1.2** or **PC1 cosine content > 0.5** means the result is not converged, whatever the
   RMSD trace looks like.
 

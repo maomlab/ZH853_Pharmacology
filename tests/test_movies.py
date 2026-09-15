@@ -155,10 +155,18 @@ def build(tmp_path):
             u.trajectory.ts.dimensions = [*BOX, 90.0, 90.0, 90.0]
             W.write(u.atoms)
 
-    u.atoms.positions = base.astype(np.float32)
+    # receptor.pdb is written in the OPM FRAME -- origin-centred, membrane midplane at z = 0 --
+    # while the trajectory lives in the packed box running 0..L. Reproducing that offset is the
+    # whole point of the fixture: a reference written in the box frame would make the pose RMSD
+    # come out right even when the code compares the two frames against each other.
+    u.atoms.positions = (base - BOX / 2).astype(np.float32)
     prot = u.select_atoms("protein")
-    with mda.Writer(str(path / "receptor.pdb"), n_atoms=len(prot)) as W:
-        W.write(prot)
+    # receptor.pdb carries the protein AND the grafted ligand, as ligands.py --graft writes it:
+    # it is the reference the ligand POSE RMSD is measured against, so a protein-only stand-in
+    # would exercise only the fallback path.
+    staged = prot + u.select_atoms("resname LIG")
+    with mda.Writer(str(path / "receptor.pdb"), n_atoms=len(staged)) as W:
+        W.write(staged)
     # MDAnalysis cannot write a prmtop; the file only has to EXIST for discover_builds, and the
     # readable topology is handed to the exporter with --topology, as on the smoke-test path.
     (path / "system.prmtop").touch()
@@ -292,3 +300,99 @@ def test_frame_spacing_is_reported(build, tmp_path):
     assert movie["n_frames"] == N_FRAMES
     assert movie["frame_spacing_ns"] == pytest.approx(0.1, abs=1e-3)
     assert len(movie["time_ns"]) == N_FRAMES
+
+
+# --- 02.11.00 ligand pose RMSD -------------------------------------------------------------------
+# The reduction lives next door and is imported the same way. These cover the reference-frame bug
+# that made lig_rmsd_pose report the ~90 A offset between the OPM frame receptor.pdb is written in
+# and the 0..L simulation box, as a near-constant "pose RMSD" for the whole replica.
+
+REDUCE = paths.SRC / "02.11.00_analyze_simulations" / "01_reduce_trajectory.py"
+
+
+def _load_reduce():
+    spec = importlib.util.spec_from_file_location("reduce_trajectory", REDUCE)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _reduce(build, out, **kw):
+    reduce_mod = _load_reduce()
+    b = md.discover_builds(build.parent)[0]
+    job = reduce_mod.Job(b, "prod_r1", build / "prod_r1.dcd")
+    return reduce_mod, reduce_mod.reduce_replica(
+        job, out, topology=build / "system_top.pdb", **kw)
+
+
+def test_pose_rmsd_uses_the_deposited_reference_when_the_names_match(build, tmp_path):
+    _, summary = _reduce(build, tmp_path / "out")
+    assert summary["ligand_reference"] == "receptor.pdb (deposited pose)"
+    pose = np.load(tmp_path / "out" / "prod_r1.npz")["lig_rmsd_pose"]
+    assert np.isfinite(pose).all()
+    assert pose[0] < 1.0                      # frame 0 IS the staged pose, up to the noise added
+
+
+def test_pose_rmsd_falls_back_in_the_REFERENCE_frame_not_the_box_frame(build, tmp_path):
+    """The regression. receptor.pdb is written in the OPM frame, centred near the origin; the
+    trajectory is in a box running 0..L. A frame-0 fallback taken from the raw box coordinates is
+    ~90 A from the aligned coordinate it gets compared against, and that offset -- not any motion
+    of the ligand -- is what the series then reports, near-constant, for the whole replica.
+    """
+    # Break the name transfer the way the analog builds do: rename the reference ligand's atoms.
+    ref = build / "receptor.pdb"
+    lines = []
+    for ln in ref.read_text().splitlines():
+        if ln.startswith(("ATOM", "HETATM")) and ln[17:20].strip() == "LIG":
+            ln = ln[:12] + f"{'X' + ln[12:16].strip():>4s}" + ln[16:]
+        lines.append(ln)
+    ref.write_text("\n".join(lines) + "\n")
+
+    _, summary = _reduce(build, tmp_path / "out")
+    assert summary["ligand_reference"] == "production frame 0 (receptor-aligned)"
+    assert any("cannot transfer the deposited pose" in w for w in summary["warnings"])
+
+    pose = np.load(tmp_path / "out" / "prod_r1.npz")["lig_rmsd_pose"]
+    assert pose[0] == pytest.approx(0.0, abs=1e-6)    # frame 0 IS the fallback reference
+    assert pose.max() < 25.0                          # motion, not a 90 A frame offset
+    assert not any("FIRST frame" in w for w in summary["warnings"])
+
+
+def test_a_reference_in_the_wrong_frame_is_caught_at_frame_zero(build, tmp_path):
+    """The safety net: whatever the cause, a pose RMSD that STARTS tens of angstroms out is a
+    broken reference, and saying so at frame 0 beats emitting a plausible-looking series."""
+    reduce_mod = _load_reduce()
+    ref = build / "receptor.pdb"
+    # Move the reference ligand bodily, leaving the names intact so the transfer still succeeds.
+    lines = []
+    for ln in ref.read_text().splitlines():
+        if ln.startswith(("ATOM", "HETATM")) and ln[17:20].strip() == "LIG":
+            x = float(ln[30:38]) + 90.0
+            ln = ln[:30] + f"{x:8.3f}" + ln[38:]
+        lines.append(ln)
+    ref.write_text("\n".join(lines) + "\n")
+
+    b = md.discover_builds(build.parent)[0]
+    job = reduce_mod.Job(b, "prod_r1", build / "prod_r1.dcd")
+    summary = reduce_mod.reduce_replica(job, tmp_path / "out",
+                                        topology=build / "system_top.pdb")
+    assert summary["ligand_reference"] == "receptor.pdb (deposited pose)"
+    assert any("FIRST frame" in w for w in summary["warnings"])
+
+
+def test_duplicate_reference_atom_names_are_refused_not_silently_scrambled(build, tmp_path):
+    """A repeated name kept whichever atom came last, giving a scrambled reference pose -- a wrong
+    RMSD that still looks like an RMSD, which is worse than no RMSD."""
+    ref = build / "receptor.pdb"
+    lines, first = [], True
+    for ln in ref.read_text().splitlines():
+        if ln.startswith(("ATOM", "HETATM")) and ln[17:20].strip() == "LIG" and not first:
+            ln = ln[:12] + f"{'C0':>4s}" + ln[16:]        # collide every atom onto one name
+        elif ln.startswith(("ATOM", "HETATM")) and ln[17:20].strip() == "LIG":
+            first = False
+        lines.append(ln)
+    ref.write_text("\n".join(lines) + "\n")
+
+    _, summary = _reduce(build, tmp_path / "out")
+    assert summary["ligand_reference"] == "production frame 0 (receptor-aligned)"

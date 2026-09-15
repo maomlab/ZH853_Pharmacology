@@ -63,6 +63,12 @@ OUT_ROOT = paths.INTERMEDIATE / "02.11.00_analyze_simulations"
 # receptor RMSD it is not dominated by the floppy termini and ICL3.
 EQUILIBRATION_OBSERVABLE = "rmsd_ca_tm"
 
+# A ligand that starts this far from its reference pose has not moved -- the reference is wrong.
+# 15 A is well past any real first-frame deviation (the deposited pose IS frame 0's starting
+# point, up to minimisation and the equilibration restraints) and well short of the ~90 A that a
+# reference in the wrong coordinate frame produces.
+LIG_POSE_SANITY_A = 15.0
+
 
 @dataclass
 class Job:
@@ -180,14 +186,31 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1,
         # The deposited pose, transferred through the build: receptor.pdb holds the grafted
         # ligand under its INPUT resname (L01), so match on atom names rather than on order.
         cand = ref_u.select_atoms("not protein")
-        by_name = {a.name.strip(): a.position for a in cand}
-        picked = [by_name.get(a.name.strip()) for a in lig]
-        if all(p is not None for p in picked) and len(by_name) >= len(lig):
-            lig_ref = np.array(picked, dtype=float)
+        ref_names = [a.name.strip() for a in cand]
+        lig_names = [a.name.strip() for a in lig]
+        # The name -> position map is only a valid transfer if each name it is asked for appears
+        # EXACTLY ONCE on each side. `len(by_name) >= len(lig)` was too weak: a duplicated name
+        # silently keeps whichever atom came last, and the reference pose is then a scrambled
+        # molecule -- a wrong RMSD that still looks like an RMSD. The reference is allowed to be a
+        # superset (it may carry hydrogens the mass-filtered topology selection dropped).
+        dupes = {n for n in ref_names if ref_names.count(n) > 1}
+        missing = sorted({n for n in lig_names if n not in set(ref_names)})
+        ambiguous = sorted({n for n in lig_names if n in dupes})
+        repeated = len(set(lig_names)) != len(lig_names)
+        if not (missing or ambiguous or repeated):
+            by_name = dict(zip(ref_names, cand.positions, strict=True))
+            lig_ref = np.array([by_name[n] for n in lig_names], dtype=float)
             lig_ref_source = "receptor.pdb (deposited pose)"
         else:
-            warnings.append("ligand atom names in receptor.pdb do not cover the topology's "
-                            "ligand; pose RMSD is measured against production frame 0 instead")
+            why = (f"{len(missing)} topology ligand atom name(s) absent from receptor.pdb "
+                   f"({', '.join(missing[:5])}{'...' if len(missing) > 5 else ''})" if missing
+                   else f"ambiguous name(s) {', '.join(ambiguous[:5])}" if ambiguous
+                   else "the topology's ligand has repeated atom names")
+            warnings.append(
+                f"cannot transfer the deposited pose: {why}. lig_rmsd_pose therefore measures "
+                "displacement from production frame 0, NOT from the deposited pose -- it says "
+                "whether the ligand stayed where it started, not whether it kept the cryo-EM "
+                "binding mode. `ligand_reference` in this replica's JSON records which was used")
 
     # --- fixed selections ---------------------------------------------------------------------
     phos = md.select_by_mass(u, *md.MASS_P)
@@ -338,12 +361,30 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1,
 
         if has_ligand:
             lig_pos = _minimum_image(lig.positions, mob.mean(axis=0), box)
-            if lig_frame0 is None:
-                lig_frame0 = lig_pos.copy()
-                if lig_ref is None:
-                    lig_ref = lig_frame0.copy()
-                    lig_ref_source = "production frame 0"
+            # Into the REFERENCE's frame, by the same superposition the CA RMSD just used.
             aligned = (lig_pos - mob.mean(axis=0)) @ rot.T + ref_ca.mean(axis=0)
+            if lig_frame0 is None:
+                lig_frame0 = lig_pos.copy()          # box frame, for lig_rmsd_frame0 below
+                if lig_ref is None:
+                    # The fallback reference has to be the ALIGNED frame 0, not the raw one.
+                    # `aligned` lives in receptor.pdb's OPM frame, which is centred near the
+                    # origin, while `lig_pos` lives in the simulation box, which runs 0..L -- so
+                    # a raw frame-0 fallback measured the ~90 A offset between those two origins
+                    # and reported it as the ligand's pose RMSD, near-constant for the whole run.
+                    lig_ref = aligned.copy()
+                    lig_ref_source = "production frame 0 (receptor-aligned)"
+                # Whatever the reference, frame 0 must sit close to it: a pose RMSD that starts
+                # tens of angstroms out is a reference in the wrong frame or matched to the wrong
+                # atoms, never a ligand that has moved. Cheap, and it fails loudly at frame 0
+                # rather than producing a plausible-looking series nobody questions.
+                start = float(np.sqrt(((aligned - lig_ref) ** 2).sum(axis=1).mean()))
+                if start > LIG_POSE_SANITY_A:
+                    warnings.append(
+                        f"ligand pose RMSD is {start:.1f} A at the FIRST frame, against "
+                        f"'{lig_ref_source}'. A reference in the right frame starts within a "
+                        f"couple of angstroms; {LIG_POSE_SANITY_A} A or more means the reference "
+                        "is in the wrong coordinate frame or matched to the wrong atoms, and "
+                        "lig_rmsd_pose is not a pose RMSD for this replica")
             assert lig_ref is not None
             rows["lig_rmsd_pose"].append(
                 float(np.sqrt(((aligned - lig_ref) ** 2).sum(axis=1).mean())))
