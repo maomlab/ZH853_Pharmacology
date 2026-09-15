@@ -175,7 +175,9 @@ async function renderOne(page, jsonPath, opts) {
 (async () => {
   const opts = parseArgs(process.argv);
   if (!haveFfmpeg()) {
-    console.error('ERROR: ffmpeg is not on PATH. `conda install -c conda-forge ffmpeg`.');
+    console.error('ERROR: ffmpeg is not on PATH. It is declared in both environment files:\n' +
+      '    conda env update -f environment_zh853mor-local.yml   # local\n' +
+      '    conda env update -f environment_zh853mor-prep.yml    # cluster');
     process.exit(1);
   }
   const movies = findMovies(opts.movies, opts.system, opts.replica);

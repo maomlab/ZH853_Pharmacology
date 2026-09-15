@@ -153,7 +153,11 @@ movie-dashboard:  ## 02.12.00  Diagnostic movies: structure + its own time serie
 movie-molstar:  ## 02.12.00  Cartoon MolStar movies -> product/ (needs Node.js)
 	cd src/02.12.00_render_trajectory_movies && npm install --silent && node 03_render_molstar.js
 
-movies: movie-dashboard movie-molstar  ## Both movie renders (after movie-export on the cluster)
+# Rendering is serial WITHIN a replica (matplotlib -> ffmpeg frame by frame; MolStar one frame at
+# a time in software WebGL), so a panel takes N times one replica. These targets render the whole
+# panel serially, which is right for one or two replicas; for the whole panel use the job array,
+# src/02.12.00_render_trajectory_movies/submit_render.sh, which runs one replica per task.
+movies: movie-dashboard movie-molstar  ## Both movie renders, SERIALLY (cluster: use submit_render.sh)
 
 ## Conformational landscapes - Phase 4  [local env; needs 02.11.00's reduced replicas]
 # Entirely local: the per-frame feature matrices these fit on were written by 02.11.00's

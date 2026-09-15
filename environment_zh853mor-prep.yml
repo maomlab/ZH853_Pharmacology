@@ -1,8 +1,12 @@
-# CPU prep environment: membrane building + ligand parameterization.
-# Runs 01_build_system.sh (PACKMOL-Memgen + tleap) and ligand_resp/ (antechamber/RESP).
-# Kept separate from the GPU run env because AmberTools is a large CPU toolkit with its own
-# version constraints; no GPU/openmm needed here.
+# CPU environment for everything on the cluster that is not a simulation.
+#
+# Originally the prep env -- 01_build_system.sh (PACKMOL-Memgen + tleap) and ligand_resp/
+# (antechamber/RESP) -- and still that, but it is also the env every CPU ANALYSIS array activates:
+# 02.11.00's trajectory reduction, 02.12.00's movie export, and 02.12.00's movie rendering. Kept
+# separate from the GPU run env because AmberTools is a large CPU toolkit with its own version
+# constraints; no GPU/openmm needed here.
 #   conda env create -f environment_zh853mor-prep.yml
+#   conda env update -f environment_zh853mor-prep.yml    # after this file changes
 name: zh853mor-prep
 channels:
   - conda-forge
@@ -15,7 +19,22 @@ dependencies:
   - mdanalysis
   - numpy
   - openff-toolkit              # optional: OpenFF Interchange route for the ligand
+  # --- CPU analysis stages (02.11.00, 02.12.00, 02.13.00) run here too ------------------------
+  - scipy                       # convergence blocking/smoothing; 02.13.00's density contours
+  - matplotlib-base             # the dashboard movies and the figures; Agg only, so no Qt
+  - ffmpeg                      # 02.12.00 writes mp4; WITHOUT THIS it silently falls back to GIF
+  - nodejs                      # optional: the headless MolStar movie pass (see NOTES)
 # NOTES:
 #  - `reduce` is bundled in ambertools ($AMBERHOME/bin/reduce); there is no conda-forge `reduce`.
 #    The earlier "reduce not available" warning was the AMBERHOME/module clash, not a missing pkg.
 #  - Do NOT also `module load amber` -- a second AmberTools breaks tool discovery in this env.
+#  - matplotlib arrives transitively via ambertools, but it is DECLARED here because 02.12.00 and
+#    02.13.00 depend on it directly; a transitive dependency is not a promise.
+#  - `ffmpeg` is the difference between an mp4 and a silent fallback to an animated GIF that is
+#    several times larger and cannot be seeked. 02_render_dashboard.py warns and degrades rather
+#    than failing, so a missing ffmpeg is easy to not notice until the files are already written.
+#  - `nodejs` only gets the MolStar movie pass as far as running. It also needs puppeteer's
+#    Chromium (`npm install` in src/02.12.00_render_trajectory_movies/, from a LOGIN node -- a
+#    compute node usually has no outbound network) and the X/NSS shared libraries that Chromium
+#    links against, which not every cluster image carries. submit_render.sh checks and skips that
+#    pass with a message rather than failing the array, so the dashboard movies still get made.

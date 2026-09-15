@@ -65,7 +65,7 @@ Run `make help` for the grouped target list.
 | 9 | Reduce the production trajectories | `./submit_reduce.sh` (one task per replica) | cluster (CPU) |
 | 10 | Simulation QC + interaction analysis | `make simulation-analysis` | local |
 | 11 | Export viewable movie trajectories | `./submit_export.sh` (one task per replica) | cluster (CPU) |
-| 12 | Render the movies | `make movies` | local |
+| 12 | Render the movies | `./submit_render.sh` (one task per replica) · `make movies` | cluster (CPU) · local |
 | 13 | Conformational landscapes (tICA) | `make landscape` | local |
 
 **Steps 5–8 are the SLURM bundle. Follow

@@ -449,8 +449,14 @@ def render(json_path: Path, out_dir: Path, fps: int, dpi: int,
 def pick_writer(fps: int):
     """An ffmpeg writer, or None to fall back to an animated GIF."""
     if shutil.which("ffmpeg") is None:
-        print("WARNING: ffmpeg not found; writing an animated GIF instead (larger, no seeking). "
-              "`conda install -c conda-forge ffmpeg` for mp4.", file=sys.stderr)
+        # Degrading rather than failing is deliberate -- a GIF is still watchable -- but it is
+        # easy not to notice until the files are written, so the message names the fix rather
+        # than the missing package.
+        print("WARNING: ffmpeg is not on PATH; writing an animated GIF instead (several times "
+              "larger, and not seekable). ffmpeg is declared in both environment files:\n"
+              "    conda env update -f environment_zh853mor-local.yml   # local\n"
+              "    conda env update -f environment_zh853mor-prep.yml    # cluster",
+              file=sys.stderr)
         return None
     # -pix_fmt yuv420p so QuickTime and PowerPoint will play it; libx264 at CRF 20 keeps thin
     # lines (the CA trace) from turning to mush. The scale filter rounds the canvas down to even
@@ -471,6 +477,11 @@ def main() -> int:
                     help="02.11.00 reduction directory, for the full-resolution traces")
     ap.add_argument("--system", help="only this system, e.g. apo_ASH")
     ap.add_argument("--replica", help="only this replica, e.g. prod_r1")
+    ap.add_argument("--list", action="store_true",
+                    help="print the numbered (system, replica) pairs and exit -- this is what "
+                         "submit_render.sh sizes its job array from")
+    ap.add_argument("--index", type=int,
+                    help="render the Nth pair, 1-based -- what the SLURM array task passes")
     ap.add_argument("--fps", type=int, default=FPS)
     ap.add_argument("--dpi", type=int, default=DPI)
     ap.add_argument("--out", type=Path, default=paths.PRODUCT)
@@ -484,7 +495,21 @@ def main() -> int:
     if not found:
         raise SystemExit(
             f"ERROR: no exported movies under {args.movies}. Run 01_export_movie_trajectory.py "
-            "on the cluster and copy intermediate/02.12.00_render_trajectory_movies/ back.")
+            "first (submit_export.sh on the cluster).")
+
+    # One listing, used both to size the array and to resolve each task's index, so the mapping
+    # cannot drift between the two -- the same arrangement 02.11.00 and the export step use.
+    if args.list:
+        for i, js in enumerate(found, start=1):
+            meta = json.loads(js.read_text())
+            mv = meta["movie"]
+            print("\t".join([str(i), meta["build"], meta["replica"], str(mv["n_frames"]),
+                             f"{mv['frame_spacing_ns']:.2f}", str(meta["atoms"]["total"])]))
+        return 0
+    if args.index is not None:
+        if not 1 <= args.index <= len(found):
+            raise SystemExit(f"ERROR: --index {args.index} outside 1-{len(found)}.")
+        found = [found[args.index - 1]]
 
     paths.ensure_dir(args.out)
     failures = 0

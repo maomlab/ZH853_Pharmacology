@@ -22,8 +22,8 @@ Every one of those shows up as "the RMSD went up" in a plot.
 | Step | Runs | Env | Reads | Writes |
 |---|---|---|---|---|
 | `01_export_movie_trajectory.py` | **cluster** (CPU, job array) | `zh853mor-prep` | `intermediate/02.10.00_build/<system>/prod_r*.dcd` | `intermediate/02.12.00_render_trajectory_movies/<system>/<replica>_movie.{pdb,xtc,json}` |
-| `02_render_dashboard.py` | **local** | `zh853mor-local` | those movie files (+ `02.11.00`'s `.npz` if present) | `product/02.12.00_*_dashboard_*.mp4` |
-| `03_render_molstar.js` | **local** | Node.js ≥ 18 | those movie files | `product/02.12.00_*_molstar_*.mp4` |
+| `02_render_dashboard.py` | local **or cluster** (CPU, job array) | `zh853mor-local` / `zh853mor-prep` | those movie files (+ `02.11.00`'s `.npz` if present) | `product/02.12.00_*_dashboard_*.mp4` |
+| `03_render_molstar.js` | local **or cluster** (see below) | Node.js ≥ 18 | those movie files | `product/02.12.00_*_molstar_*.mp4` |
 
 The split is the same one `02.11.00` makes, for the same reason: a 500 ns replica is ~5 GB and the
 panel is ~100 GB, so the trajectory stays on the cluster. **Only the exported movie files come
@@ -52,11 +52,39 @@ Read `ns/frame` before submitting. At 1.67 ns per frame nothing faster than that
 result: a sidechain rotamer flip, a water exchange, a transient contact — all gone. Raise
 `--frames` (`./submit_export.sh -- --frames 1000`) when the question is a fast event.
 
-Then copy `intermediate/02.12.00_render_trajectory_movies/` to the machine with the local env:
+Then render. Both passes are **single-core and serial within a replica** — matplotlib draws
+every frame in turn and pipes it to ffmpeg, and MolStar draws its frames one at a time in software
+WebGL — so a panel of fifteen replicas takes fifteen times one replica. There is no threading to
+be had inside one; the way to make it fast is to run the replicas concurrently.
+
+**On the cluster** (one array task per replica; fifteen then take about as long as the slowest
+one):
+
+```bash
+cd src/02.12.00_render_trajectory_movies
+./submit_render.sh -n                    # dry run: inventory + the sbatch command
+./submit_render.sh                       # both passes
+./submit_render.sh --only dashboard      # matplotlib only — needs no node
+```
+
+**Locally**, after copying `intermediate/02.12.00_render_trajectory_movies/` back:
 
 ```bash
 make movies            # both renders; or movie-dashboard / movie-molstar separately
 ```
+
+Either way **`ffmpeg` must be on PATH**, or `02_render_dashboard.py` degrades to an animated GIF —
+several times larger and not seekable — with a warning that is easy to miss until the files exist.
+It is declared in both environment files; an env created before that needs
+`conda env update -f environment_zh853mor-prep.yml` (or `…-local.yml`).
+
+The MolStar pass additionally needs `node` **and** an installed `node_modules`, which means
+running `npm install` in this directory **from a login node** — compute nodes usually have no
+outbound network, and puppeteer downloads its own Chromium. Even then, that Chromium links
+against X/NSS shared libraries that not every cluster image carries. `submit_render.sh` checks all
+of this before submitting and each task checks again, skipping the MolStar pass with a message
+rather than failing the array — so the dashboard movies are still produced. If it will not run
+there, render that pass locally; it is the presentable one, not the diagnostic one.
 
 `01_export_movie_trajectory.py` skips a replica whose `.json` already exists — rerun with
 `--force` after changing what is exported.

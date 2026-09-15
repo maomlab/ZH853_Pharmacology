@@ -10,6 +10,7 @@ dependencies:
   - scipy
   - pandas
   - matplotlib
+  - ffmpeg            # mp4 encoding for 02.12.00; without it the movies fall back to GIF
   - rdkit
   - mdanalysis>=2.7          # MDAnalysis <2.7 does not support NumPy 2.0
   - biotite
