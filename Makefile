@@ -3,7 +3,12 @@
 #
 #   LOCAL analysis env  -- EVERY target in this Makefile runs here.
 #                          Create with `make env-local`, then `conda activate zh853mor-local`.
-#                          (`molstar-render` additionally needs Node.js >= 18.)
+#
+#   NODE (>= 18)        -- the two headless-MolStar render stages, `molstar-render` (03.10.00) and
+#                          `movie-molstar` (02.12.00), need it plus an installed node_modules.
+#                          Locally both targets run `npm install` themselves. On the CLUSTER node
+#                          ships inside zh853mor-prep and the install must be done on a LOGIN
+#                          node: `make env-cluster` does it, or `make env-node` on its own.
 #
 #   CLUSTER envs (zh853mor-prep / -sim / -plumed) -- used ONLY by the SLURM bundle
 #                          in src/02.10.00_slurm_bundle/, run ON the cluster, NOT via
@@ -19,7 +24,7 @@
 # ==============================================================================
 
 .PHONY: help \
-        env-local env-cluster \
+        env-local env-cluster env-node \
         lint format typecheck test check \
         fetch \
         qc interactions mutations analogs design interaction-map depictions analysis \
@@ -41,10 +46,38 @@ help:  ## Show this grouped target list
 env-local:  ## Create the LOCAL analysis env zh853mor-local (this Makefile runs here)
 	conda env create -f environment_zh853mor-local.yml || conda env update -f environment_zh853mor-local.yml
 
-env-cluster:  ## Create ALL cluster envs: zh853mor-prep, -sim, -plumed (on the cluster)
+env-cluster:  ## Create ALL cluster envs + the Node deps (RUN ON A LOGIN NODE)
 	conda env create -f environment_zh853mor-prep.yml   || conda env update -f environment_zh853mor-prep.yml
 	conda env create -f environment_zh853mor-sim.yml    || conda env update -f environment_zh853mor-sim.yml
 	conda env create -f environment_zh853mor-plumed.yml || conda env update -f environment_zh853mor-plumed.yml
+	@echo ""
+	@echo "--- Node deps for the headless MolStar movie pass (02.12.00) ---"
+	@cd src/02.12.00_render_trajectory_movies \
+	  && conda run -n zh853mor-prep npm install --silent \
+	  && echo "  installed: the MolStar movie pass will run on this cluster" \
+	  || { echo "  SKIPPED: npm install failed."; \
+	       echo "  Usually no outbound network -- run 'make env-cluster' on a LOGIN node."; \
+	       echo "  Without it submit_render.sh skips the MolStar pass with a message; the"; \
+	       echo "  dashboard movies and every other stage are unaffected."; }
+
+# The two headless-MolStar renderers each keep their own node_modules, because puppeteer downloads
+# its own Chromium (~150 MB apiece). The LOCAL targets install on demand -- `movie-molstar` and
+# `molstar-render` both run `npm install` themselves -- so this target exists for the CLUSTER,
+# where the install has to happen on a LOGIN node: a compute node usually has no outbound network,
+# and a job that discovers that has already spent its queue time.
+NODE_STAGES := src/02.12.00_render_trajectory_movies src/03.10.00_molstar_render
+
+env-node:  ## Install the headless-MolStar Node deps for both render stages (LOGIN NODE)
+	@command -v node >/dev/null 2>&1 || { \
+	  echo "ERROR: node is not on PATH."; \
+	  echo "  Cluster: it ships with zh853mor-prep -- 'conda activate zh853mor-prep', then retry."; \
+	  echo "  Local:   install Node.js >= 18."; exit 1; }
+	@node --version | sed 's/^/node /'
+	@for d in $(NODE_STAGES); do \
+	  echo "npm install in $$d"; \
+	  (cd $$d && npm install --silent) \
+	    || echo "  WARNING: failed in $$d (on a cluster, usually no outbound network)"; \
+	done
 
 ## Development & CI  [local env]
 lint:  ## Ruff lint (package + tests)

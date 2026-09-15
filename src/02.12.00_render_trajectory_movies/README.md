@@ -78,9 +78,17 @@ several times larger and not seekable — with a warning that is easy to miss un
 It is declared in both environment files; an env created before that needs
 `conda env update -f environment_zh853mor-prep.yml` (or `…-local.yml`).
 
-The MolStar pass additionally needs `node` **and** an installed `node_modules`, which means
-running `npm install` in this directory **from a login node** — compute nodes usually have no
-outbound network, and puppeteer downloads its own Chromium. Even then, that Chromium links
+The MolStar pass additionally needs `node` **and** an installed `node_modules`. `node` ships
+inside `zh853mor-prep`; the install has to happen **from a login node**, because compute nodes
+usually have no outbound network and puppeteer downloads its own Chromium:
+
+```bash
+make env-cluster                                    # creates the envs and does this
+conda activate zh853mor-prep && make env-node       # or just this, if the envs exist
+```
+
+(The root [README](../../README.md#nodejs-and-why-it-has-to-be-installed-on-a-login-node) says the
+same thing next to the rest of the installation.) Even with it installed, that Chromium links
 against X/NSS shared libraries that not every cluster image carries. `submit_render.sh` checks all
 of this before submitting and each task checks again, skipping the MolStar pass with a message
 rather than failing the array — so the dashboard movies are still produced. If it will not run

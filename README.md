@@ -29,6 +29,34 @@ two separate envs, and deliberately does *not* carry `pdbfixer` — so the recep
 membrane orientation are local steps. `intermediate/` is git-ignored, so anything produced on one
 machine must be **copied** to the other; `git pull` will not bring it.
 
+### Node.js, and why it has to be installed on a login node
+
+Two stages render with **headless MolStar** and so need **Node.js ≥ 18** plus an installed
+`node_modules`: [`03.10.00`](src/03.10.00_molstar_render/README.md) (the manuscript's 3D figures)
+and [`02.12.00`](src/02.12.00_render_trajectory_movies/README.md) (the cartoon trajectory movies).
+Each keeps its own `node_modules`, because puppeteer downloads its own Chromium — about 150 MB
+apiece.
+
+**Locally** nothing needs doing: `make molstar-render` and `make movie-molstar` each run
+`npm install` themselves.
+
+**On the cluster** it has to be done deliberately, and **from a login node** — a compute node
+usually has no outbound network, so a job that discovers this has already spent its queue time.
+`node` itself ships inside `zh853mor-prep`:
+
+```bash
+make env-cluster                  # creates the three conda envs AND does the npm install
+# or, if the envs already exist:
+conda activate zh853mor-prep && make env-node
+```
+
+Neither is required. If the install is absent — or if the cluster image lacks the X/NSS shared
+libraries Chromium links against, which is common —
+[`submit_render.sh`](src/02.12.00_render_trajectory_movies/README.md) checks before submitting,
+and each task checks again and **skips the MolStar pass with a message** rather than failing. The
+diagnostic dashboard movies and every other stage are unaffected; the cartoon pass can always be
+rendered locally instead.
+
 ### Configure `cluster.env` first
 
 Before any step that runs on the cluster, copy the template at the **repository root** and fill in
@@ -53,7 +81,7 @@ Run `make help` for the grouped target list.
 
 | # | Step | Command | Where |
 |---|------|---------|-------|
-| 0 | Create the environments | `make env-local` · `make env-cluster` | local · cluster |
+| 0 | Create the environments | `make env-local` · `make env-cluster` (login node; also installs the Node deps) | local · cluster |
 | 1 | Fetch comparator structures | `make fetch` | local |
 | 2 | Static analysis (Objectives 1–3) | `make analysis` | local |
 | 3 | Receptor, ligand and analog preparation | `make prep` | local |
