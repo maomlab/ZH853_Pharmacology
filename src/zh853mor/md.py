@@ -285,7 +285,14 @@ class ResidueMinDistance:
         resindices = np.asarray(atoms.resindices)
         if resindices.size and np.any(np.diff(resindices) < 0):
             raise ValueError("atoms must be in topology order for per-residue reduction")
-        self.offsets = np.flatnonzero(np.r_[True, np.diff(resindices) != 0])
+        # An EMPTY selection has to give zero rows, not one. `np.r_[True, ...]` on an empty array
+        # is `[True]`, which would claim a residue that is not there: the constructor then raised
+        # IndexError, and `__call__`'s own empty-case guard -- which returns `offsets.size` rows --
+        # would have returned one row of inf for no residues. Reachable whenever a residue lacks
+        # the atoms being selected, e.g. the D2.50 carboxylate in a D116N mutant build, which is
+        # exactly the case the caller's fallback-and-warn path exists to survive.
+        self.offsets = (np.flatnonzero(np.r_[True, np.diff(resindices) != 0])
+                        if resindices.size else np.empty(0, dtype=int))
         self.resindices = resindices[self.offsets]
 
     def __call__(self, partner_positions: np.ndarray, box: np.ndarray | None) -> np.ndarray:

@@ -154,6 +154,40 @@ This file records decisions, clarifications, and conventions made as the ZH853�
   `submit_export.sh` prints the ns/frame column before the array is submitted, so the decision to
   raise `--frames` is made before the compute rather than after the movie disappoints. (2026-09-14)
 
+- **D-26 (the conformational-feature matrices are produced by the reduction, not by a second
+  pass):** `02.11.00`'s reduction now also stores, per frame, the pairwise Ca-Ca distances among
+  the 36 key/functional residues (`key_pairs`) alongside the existing per-residue ligand distances
+  (`min_dist`). Reason: it is the only stage that reads the trajectories, and a separate
+  featurisation stage would be a second ~100 GB read for arrays it already has the coordinates to
+  compute. Cost: the reduced files grow from a few hundred kB to ~7 MB per replica (~200 MB for
+  the panel), which is still an scp rather than a data-management problem. **A reduction produced
+  before this change has no `key_pairs` and must be re-run with `--force`**; `02.13.00` says so by
+  name rather than falling back to a thinner feature set. Ca rather than sidechain tips, for the
+  reason the activation rulers already give: at 3.5 A the rotamers are the least reliable
+  coordinates in the model, and featurising them would let tICA find slow modes in the model's
+  guesses. Ca distances are also defined for the **apo** arm, which ligand-contact features are
+  not — that is what lets apo and holo share one landscape. (2026-09-14)
+- **D-27 (landscapes are drawn on ONE basis, fitted once, and the between-system variance is
+  reported):** `02.13.00` fits its tICA basis on the pooled post-equilibration frames of every
+  system being compared and projects each into it. Fitting per system would give each its own
+  axes, and two landscapes drawn on different linear combinations of distances cannot be laid
+  beside each other however alike they look. The consequence has to be stated rather than hidden:
+  systems do not interconvert, so a direction separating two of them has an autocorrelation of ~1
+  at any lag and tICA returns it first with an infinite implied timescale. That is a useful
+  DISCRIMINATIVE axis, not a relaxation time. Every component therefore carries the **fraction of
+  its variance lying between systems** (flagged above 0.5), and its timescale is re-estimated
+  separately within each system, where the coordinate can actually relax. `--fit-on <system>` is
+  available for the stricter reading. (2026-09-14)
+- **D-28 (a landscape is a sampling density, and is labelled as one):** the heatmaps are
+  -kT ln P at 310 K over the frames the trajectories actually visited — not a reweighted or
+  converged free energy (D-5). Bins below a frame-count floor are left unshaded rather than drawn
+  as a barrier, because -kT ln(1/N) for one stray frame is a confident-looking wall built from a
+  single sample; difference maps are shown only where BOTH systems are sampled, with the
+  sampled-by-one-only region hatched, so a difference in coverage is never read as a difference in
+  energetics. tICA inherits D-20's trap unchanged — on an unconverged replica the slowest apparent
+  process is the drift — so `convergence.cosine_content` is reported per replica for the tIC
+  projections exactly as it is for the PCs. (2026-09-14)
+
 ## Open questions (need user input)
 - **OQ-3 (compute environment):** SLURM cluster specs (GPU types/count, wall-time limits, queue), and which
   software is preinstalled vs must be built (OpenMM, PLUMED, OpenFE, phenix/MolProbity, Gaussian/Psi4 for RESP)?

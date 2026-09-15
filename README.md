@@ -66,6 +66,7 @@ Run `make help` for the grouped target list.
 | 10 | Simulation QC + interaction analysis | `make simulation-analysis` | local |
 | 11 | Export viewable movie trajectories | `./submit_export.sh` (one task per replica) | cluster (CPU) |
 | 12 | Render the movies | `make movies` | local |
+| 13 | Conformational landscapes (tICA) | `make landscape` | local |
 
 **Steps 5–8 are the SLURM bundle. Follow
 [`src/02.10.00_slurm_bundle/README.md`](src/02.10.00_slurm_bundle/README.md)** — it is the

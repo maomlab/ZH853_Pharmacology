@@ -438,3 +438,17 @@ def test_timeseries_pairs_each_series_with_its_own_time_axis(tmp_path):
              log_time_ps=np.array([100.0, 200.0, 300.0]), log_density=np.array([1.01, 1.02]))
     t, y = md.load_replicas(tmp_path)[0].timeseries("log_density")
     assert t.tolist() == [0.1, 0.2] and y.tolist() == [1.01, 1.02]
+
+
+def test_residue_min_distance_accepts_an_empty_selection(system):
+    """Zero rows, not one, and no exception: a residue can simply lack the atoms being selected.
+
+    The D2.50 carboxylate of a D116N mutant build is the case that reaches this, and
+    01_reduce_trajectory.py has a fallback-and-warn path that only works if constructing the
+    reducer from an empty group is survivable.
+    """
+    empty = md.ResidueMinDistance(system.atoms[[]])
+    assert empty.offsets.size == 0
+    assert empty.resindices.size == 0
+    out = empty(system.select_atoms("resname WAT").positions, None)
+    assert out.shape == (0,)

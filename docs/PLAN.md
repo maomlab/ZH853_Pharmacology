@@ -40,6 +40,13 @@ Decisions and clarifications are logged in [`../SPECIFICATION.md`](../SPECIFICAT
 > measure, and the failure modes worth catching early — a lipid in the orthosteric site, ECL2
 > lifting off, the receptor sliding along the membrane normal — all reach it as "the RMSD went
 > up". Like `02.11.00`, it has been exercised end to end on a synthetic system only.
+>
+> Phase 4 also gains a **comparative arm**: `src/02.13.00_map_conformational_landscapes/` reduces
+> every replica to two collective variables — tICA on receptor Cα–Cα distances or on ligand
+> contacts, or a named feature pair — and draws each system's density on that shared plane as a
+> free-energy heatmap with difference maps (D-26…D-28). The features it needs are now written by
+> `02.11.00`'s reduction, so **reductions produced before 2026-09-14 must be re-run with
+> `--force`** to gain `key_pairs`.
 
 ---
 
@@ -245,6 +252,15 @@ System prep is the mature, low-risk backbone of the project. Key decisions logge
   produces a diagnostic dashboard movie and a MolStar cartoon movie in `product/02.12.00_*`.
   The exported pair also opens directly in VMD/PyMOL/ChimeraX for interactive inspection
   (**D-23**), and every frame carries its simulated time and the movie's `ns/frame` (**D-25**).
+- **Landscape stage implemented** — `src/02.13.00_map_conformational_landscapes/` (see its
+  README): the comparative counterpart to the per-observable analysis. Fits ONE tICA basis on the
+  pooled post-equilibration frames of the whole panel and projects every system into it
+  (**D-27**), then draws per-system −kT ln P heatmaps on shared bins, difference maps against a
+  reference, and the diagnostics that decide whether the axes mean anything — implied timescale
+  against lag, replicate agreement, cosine content (**D-28**). Runs entirely locally on the
+  feature matrices the reduction now stores (**D-26**). tICA itself is in
+  `zh853mor.landscape`, validated against an Ornstein–Uhlenbeck process whose relaxation time is
+  known in closed form.
 - **Still to do:** run it on the finished replicas; **mutant simulations** for the top Phase-3
   candidates (in-silico mutagenesis + MD) to check pocket integrity and ZH853-contact disruption;
   lipid S_CD order parameters (deferred — thickness and APL carry the bilayer QC for now).

@@ -3,14 +3,18 @@
 
 **Runs on the cluster**, in `zh853mor-prep` (MDAnalysis), where the trajectories are: a 500 ns
 replica sampled every 100 ps is ~5 GB, and the panel is 3 replicas x up to 10 systems. Everything
-downstream works on what this writes -- a few hundred kB per replica -- so the aggregation and the
-figures run locally on a laptop without moving a single DCD.
+downstream works on what this writes -- ~7 MB per replica, nine tenths of it the two per-frame
+feature matrices -- so the aggregation, the figures and the conformational landscapes run locally
+on a laptop without moving a single DCD. (~200 MB for the whole panel; `--stride` shrinks it
+proportionally if that ever matters more than the time resolution of the tICA lag.)
 
 One pass over the trajectory computes, per frame:
 
   * Ca RMSD against the staged OPM-oriented receptor, whole and TM-only, superposed
   * receptor-aligned ligand RMSD (pose retention) and the ligand's own internal RMSD and Rg
   * minimum heavy-atom distance from EVERY receptor residue to the ligand (the contact matrix)
+  * pairwise CA-CA distances among the key/functional residues -- the shared conformational
+    feature set `02.13.00` fits its tICA basis on, and the only one apo and holo have in common
   * polar (N/O-N/O) distances and bridging-water counts for the anchor residues
   * activation rulers (R3.50-T6.34, R3.50-Y7.53), the C142-C219 disulfide, the D2.50 Na+ site
   * bilayer thickness, gross area per lipid, box, and the TM z-registration
@@ -45,6 +49,7 @@ sys.path.insert(0, __file__.rsplit("/src/", 1)[0] + "/src")
 import MDAnalysis as mda  # noqa: E402
 import numpy as np  # noqa: E402
 from MDAnalysis.analysis.align import rotation_matrix  # noqa: E402
+from MDAnalysis.lib.distances import self_distance_array  # noqa: E402
 
 from zh853mor import convergence as cv  # noqa: E402
 from zh853mor import md, paths  # noqa: E402
@@ -140,11 +145,12 @@ def summarize(series: np.ndarray, t0: int, frames_per_ns: float) -> dict[str, fl
             "drift_per_ns": slope * frames_per_ns, "drift_se": slope_se * frames_per_ns}
 
 
-def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object]:
+def reduce_replica(job: Job, out_dir: Path, stride: int = 1,
+                   topology: Path | None = None) -> dict[str, object]:
     """Compute every observable for one replica and write the .npz/.json pair."""
     build = job.build
     warnings: list[str] = []
-    u = mda.Universe(str(build.prmtop), str(job.dcd))
+    u = mda.Universe(str(topology or build.prmtop), str(job.dcd))
     ref_u = mda.Universe(str(build.receptor_pdb))
 
     # Human OPRM1 numbering, transferred from the staged receptor; `warnings` collects the
@@ -235,6 +241,29 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
                 f"({polar_sel}) and not backbone and not name N O")
             warnings.append("D2.50 has no OD1/OD2; the Na+ distance uses its non-backbone "
                             f"polar atoms instead ({len(d250_carboxylate)} atoms)")
+    # --- the shared conformational feature set ------------------------------------------------
+    # Pairwise CA-CA distances among the key/functional residues, kept per frame. This is the
+    # feature axis `02.13.00` fits its tICA basis on, and it has to be produced HERE because it is
+    # the only place the trajectories are read: a separate featurisation pass would be a second
+    # ~100 GB read for arrays this step already has the coordinates to compute.
+    #
+    # CA rather than sidechain tips, for the reason the activation rulers give (D-19): at 3.5 A
+    # the rotamers are the least reliable coordinates in the starting model, so a sidechain
+    # featurisation would let tICA find slow modes in the model's guesses. CA distances are also
+    # defined for EVERY system including apo, which is what lets the apo arm share a landscape
+    # with the holo ones -- the ligand-contact features (`min_dist`) cannot.
+    key_ids = [r for r in sorted(md.KEY_RESIDUES) if r in index_of]
+    key_ca = u.atoms[[]]
+    for r in key_ids:
+        key_ca = key_ca + ca_of(r)
+    if len(key_ca) != len(key_ids):
+        missing = len(key_ids) - len(key_ca)
+        warnings.append(f"{missing} key residue(s) have no CA; the conformational feature set is "
+                        "that much smaller and is NOT comparable with another build's")
+        key_ids = [r for r, g in zip(key_ids, (ca_of(r) for r in key_ids), strict=True) if len(g)]
+    key_pair_ids = np.array([(a, b) for i, a in enumerate(key_ids) for b in key_ids[i + 1:]],
+                            dtype=int)
+
     ss_pair = [prot.residues[index_of[r]].atoms.select_atoms("name SG")
                for r in md.C142_C219 if r in index_of]
     # Na+ to the D2.50 carboxylate: one row (the single residue), minimised over every Na+.
@@ -261,6 +290,7 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
         "lig_rgyr", "na_d250_dist", "ss_dist")}
     min_dist = np.empty((0, n_res), dtype=np.float16)
     dist_rows, polar_rows, bridge_rows, activation_rows, ca_frames = [], [], [], [], []
+    key_pair_rows: list[np.ndarray] = []
     lig_frame0: np.ndarray | None = None
     started = time.time()
 
@@ -334,6 +364,12 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
         activation_rows.append([
             float(np.linalg.norm(a.positions[0] - b.positions[0])) if len(a) and len(b) else np.nan
             for _, a, b in activation_pairs])
+        if len(key_ca) > 1:
+            # No `box=`: these are intra-protein distances and the receptor spans more than half
+            # the box, where the minimum-image convention would fold a genuine 60 A separation
+            # back to 31 A. The protein arrives whole because OpenMM wraps molecule by molecule,
+            # which is the same assumption the CA RMSD above already rests on.
+            key_pair_rows.append(self_distance_array(key_ca.positions).astype(np.float16))
         rows["na_d250_dist"].append(
             float(na_to_d250(sodium.positions, box)[0])
             if len(d250_carboxylate) and len(sodium) else np.nan)
@@ -347,6 +383,8 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
     series = {k: np.array(v, dtype=float) for k, v in rows.items()}
     if dist_rows:
         min_dist = np.array(dist_rows, dtype=np.float16)
+    key_pairs = (np.array(key_pair_rows, dtype=np.float16) if key_pair_rows
+                 else np.empty((0, len(key_pair_ids)), dtype=np.float16))
     activation = np.array(activation_rows, dtype=float)
     frames_per_ns = 1000.0 / (dt_ps * stride)
 
@@ -403,6 +441,7 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
         "n_atoms": int(len(u.atoms)),
         "n_protein_residues": n_res, "n_phospholipids": n_phos, "n_sterols": n_sterol,
         "n_waters": int(len(water_o)), "n_sodium": int(len(sodium)),
+        "n_key_residues": len(key_ids), "n_key_pairs": int(len(key_pair_ids)),
         "ligand_resname": resname, "n_ligand_atoms": int(len(lig)),
         "ligand_reference": lig_ref_source,
         "equilibration": {"observable": EQUILIBRATION_OBSERVABLE, "t0_frames": int(t0),
@@ -420,6 +459,7 @@ def reduce_replica(job: Job, out_dir: Path, stride: int = 1) -> dict[str, object
         out_dir / f"{job.replica}.npz",
         resids=resids, ca_resids=ca_resids, rmsf=rmsf, occupancy=per_residue_occupancy,
         min_dist=min_dist, anchor_resids=np.array(anchor_ids, dtype=int),
+        key_pairs=key_pairs, key_pair_ids=key_pair_ids,
         activation=activation, activation_labels=np.array(
             [label for label, _, _ in activation_pairs]),
         pc_projection=proj.astype(np.float32), t0=t0,
@@ -440,6 +480,8 @@ def main() -> int:
                                               "-- this is what the SLURM array task passes")
     ap.add_argument("--list", action="store_true", help="print the numbered pairs and exit")
     ap.add_argument("--stride", type=int, default=1, help="use every Nth frame")
+    ap.add_argument("--topology", type=Path,
+                    help="topology to use instead of the build's system.prmtop")
     ap.add_argument("--out", type=Path, default=OUT_ROOT)
     ap.add_argument("--force", action="store_true", help="recompute even if outputs exist")
     ap.add_argument("--all-builds", action="store_true",
@@ -490,7 +532,7 @@ def main() -> int:
             continue
         print(f"--- {job.build.name} / {job.replica}: {job.dcd}", flush=True)
         try:
-            summary = reduce_replica(job, out_dir, stride=args.stride)
+            summary = reduce_replica(job, out_dir, stride=args.stride, topology=args.topology)
         except Exception as exc:  # noqa: BLE001 -- see below
             # Deliberately broad: a replica killed at its wall-time leaves a TRUNCATED DCD, and
             # the readers raise whatever their decompressor or parser happens to raise (EOFError,

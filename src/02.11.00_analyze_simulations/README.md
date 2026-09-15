@@ -18,9 +18,18 @@ judges convergence rather than assuming it.
 | `03_figures.py` | **local** | `zh853mor-local` | those `.npz`/`.json` | `product/02.11.00_*.png` |
 
 A 500 ns replica sampled every 100 ps is ~5 GB, and the panel is 3 replicas x up to 10 systems —
-on the order of 100 GB, which stays on the cluster. The reduction writes a few hundred kB per
-replica, so **only the reduced files need to be copied back**, and every table and figure can then
-be regenerated on a laptop in seconds without touching a trajectory.
+on the order of 100 GB, which stays on the cluster. The reduction writes ~7 MB per replica
+(~200 MB for the panel), so **only the reduced files need to be copied back**, and every table and
+figure can then be regenerated on a laptop in seconds without touching a trajectory.
+
+Nine tenths of that is the two per-frame feature matrices — `min_dist`, every receptor residue's
+minimum heavy-atom distance to the ligand, and `key_pairs`, the pairwise Cα–Cα distances among
+the key and functional residues. They are the input
+[`02.13.00`](../02.13.00_map_conformational_landscapes/README.md) fits its tICA basis on, and they
+are computed here because this is the only stage that reads the trajectories: a separate
+featurisation pass would be a second ~100 GB read for arrays this one already has the coordinates
+to produce. `--stride` shrinks them proportionally if the size ever matters more than the time
+resolution available to a tICA lag.
 
 ## Running it
 
@@ -74,6 +83,11 @@ creates that directory; submitting `submit_reduce.sbatch` by hand needs the `mkd
 `01_reduce_trajectory.py` skips a replica whose `.json` already exists — rerun with `--force` after
 changing what is measured. `--stride N` subsamples frames for a quick look.
 
+> **Reductions produced before 2026-09-14 have no `key_pairs`** and must be re-run with `--force`
+> before [`02.13.00`](../02.13.00_map_conformational_landscapes/README.md) can fit a receptor-space
+> landscape on them (D-26). That stage says so by name rather than quietly using a thinner feature
+> set. Nothing else about the outputs changed.
+
 ## What is measured, and why
 
 **Reliability.** Thermodynamics (T, density and its drift) from the OpenMM state log; membrane
@@ -105,6 +119,17 @@ and Na+ occupancy of the D2.50 site, the direct test of the ASP/ASH pair built u
   carries 50 independent samples.
 * **R-hat > 1.2** or **PC1 cosine content > 0.5** means the result is not converged, whatever the
   RMSD trace looks like.
+
+## What else reads these files
+
+Two stages downstream work on nothing but what this one writes:
+
+* [`02.12.00`](../02.12.00_render_trajectory_movies/README.md) — the movies, for looking at a
+  replica rather than measuring it (it re-reads the trajectories itself; only its dashboard
+  borrows the traces from here).
+* [`02.13.00`](../02.13.00_map_conformational_landscapes/README.md) — the conformational
+  landscapes, which fit a shared tICA basis on `key_pairs` or `min_dist` and draw each system's
+  density on it. Entirely local, because the featurisation already happened here.
 
 ## When the numbers are not enough
 

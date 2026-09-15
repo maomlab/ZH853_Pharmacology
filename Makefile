@@ -28,6 +28,7 @@
         prep-ligand-parameterize prep \
         sim-reduce sim-aggregate sim-figures simulation-analysis \
         movie-export movie-dashboard movie-molstar movies \
+        landscape-fit landscape-figures landscape \
         membrane-plot \
         molstar-render figures manuscript clean-intermediate
 
@@ -153,6 +154,20 @@ movie-molstar:  ## 02.12.00  Cartoon MolStar movies -> product/ (needs Node.js)
 	cd src/02.12.00_render_trajectory_movies && npm install --silent && node 03_render_molstar.js
 
 movies: movie-dashboard movie-molstar  ## Both movie renders (after movie-export on the cluster)
+
+## Conformational landscapes - Phase 4  [local env; needs 02.11.00's reduced replicas]
+# Entirely local: the per-frame feature matrices these fit on were written by 02.11.00's
+# reduction, which is the only stage that reads the trajectories. SPACE selects the coordinates
+# (receptor | ligand | pair); pass through for the others, e.g. `make landscape SPACE=ligand`.
+SPACE ?= receptor
+
+landscape-fit:  ## 02.13.00  Fit the shared tICA basis + project every replica -> intermediate/
+	python src/02.13.00_map_conformational_landscapes/01_fit_landscape.py --space $(SPACE) --scan
+
+landscape-figures:  ## 02.13.00  Landscapes, difference maps and diagnostics -> product/
+	python src/02.13.00_map_conformational_landscapes/02_figures.py --space $(SPACE)
+
+landscape: landscape-fit landscape-figures  ## Both landscape steps (SPACE=receptor|ligand|pair)
 
 ## Figures & manuscript  [LOCAL env (zh853mor-local); molstar-render also needs Node.js >= 18]
 membrane-plot: prep-receptor-orient  ## 03.04.00  Membrane-placement determination plot -> product/ (manuscript panel B)
